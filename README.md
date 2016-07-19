@@ -1,4 +1,4 @@
-# OCULORUM (wip)
+# OCOLORUM (wip)
 an abstract light clock running on arduino uno + rtc to drive neopixels into different color modes.
 
 **dependencies**
