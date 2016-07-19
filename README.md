@@ -1,6 +1,12 @@
 # OCOLORUM (wip)
 an abstract light clock running on arduino uno + rtc to drive neopixels into different color modes.
 
+**hardware**
+
+- arduino uno or attiny85/84
+- DS1307, DS32331 rtc module
+- NeoPixels (at least 10)
+
 **dependencies**
 
 * Time.h
