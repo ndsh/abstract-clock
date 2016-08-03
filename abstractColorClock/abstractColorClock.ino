@@ -20,6 +20,7 @@ const uint8_t PROGMEM gamma[] = {
 #include <Time.h>
 #include <DS1307RTC.h>
 #include <Adafruit_NeoPixel.h>
+#include <Button.h>
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
@@ -43,6 +44,11 @@ boolean beforeNoon = false;
 boolean debug = false;
 float correction = 2.0;
 int mode = 0;
+
+Button button1(2); // Connect your button between pin 2 and GND
+Button button2(3); // Connect your button between pin 3 and GND
+Button button3(4); // Connect your button between pin 4 and GND
+bool setupMode;
 
 int hours2color[12][3] = {
   { 20, 24, 39 },
@@ -69,6 +75,7 @@ void setup() {
     if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
   #endif
   
+  while (!Serial) { }; // for Leos
   Serial.begin(9600);
   pixels.begin(); // This initializes the NeoPixel library.
 
@@ -81,9 +88,18 @@ void setup() {
   //mHour = hour();
   //mMinute = minute();
   //mSecond = second();
+
+  button1.begin();
+  button2.begin();
+  button3.begin();
+
+  setupMode = false;
 }
 
 void loop() {
+  if (button1.pressed()) {
+    setupMode = !setupMode;
+  }
   if(!debug) {
     tmElements_t tm;
     if (RTC.read(tm)) {
@@ -105,54 +121,62 @@ void loop() {
       mHour = 0;
     }
   }
-  mCurrentSeconds = (mMinute*60)+mSecond;
-  beforeNoon = (mHour<=11?true:false);
-  currentHour = mHour;
-  nextHour = (currentHour+1)%12;
-  if(nextHour==0) nextHour = currentHour;
-  
-  if(!beforeNoon) {
-    deltaNoon = (mHour-12)+1;
-    theOdd = (deltaNoon*2)-1;
-    currentHour = mHour-theOdd;
-    nextHour = (currentHour-1)%24;
-    if(nextHour == -1) nextHour = 0;    
-  }  
-
-  
-  r = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
-  g = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
-  b = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
-
-  r =  pgm_read_byte(&gamma[r]);
-  g =  pgm_read_byte(&gamma[g]);
-  b =  pgm_read_byte(&gamma[b]);
-  
-  if(mode == 1) {
-  r *= correction;
-  g *= correction;
-  b *= correction;
-  }
-    int point = 0;
+  if(setupMode) { // fc: we're entering corneria city now.
+    
     for(int i=0; i<NUMPIXELS; i++) {
-      pixels.setPixelColor(i, r,g,b);
-      /*
-      if(point == 0) pixels.setPixelColor(i, r,r,r);
-      else if(point == 1) pixels.setPixelColor(i, g,g,g);
-      else if(point == 2) pixels.setPixelColor(i, b,b,b);
-      point++;
-      if(point == 3) point = 0;
-      */
+      pixels.setPixelColor(i, 0,0,0);
     }
     pixels.show();
-    //delay(wait);
+  } else { // fl: this is horrible
+    mCurrentSeconds = (mMinute*60)+mSecond;
+    beforeNoon = (mHour<=11?true:false);
+    currentHour = mHour;
+    nextHour = (currentHour+1)%12;
+    if(nextHour==0) nextHour = currentHour;
+    
+    if(!beforeNoon) {
+      deltaNoon = (mHour-12)+1;
+      theOdd = (deltaNoon*2)-1;
+      currentHour = mHour-theOdd;
+      nextHour = (currentHour-1)%24;
+      if(nextHour == -1) nextHour = 0;    
+    }  
 
-    Serial.print(mHour);
-    Serial.print(":");
-    Serial.print(mMinute);
-    Serial.print(":");
-    Serial.println(mSecond);
-    delay(999);
+    
+    r = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
+    g = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
+    b = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
+
+    r =  pgm_read_byte(&gamma[r]);
+    g =  pgm_read_byte(&gamma[g]);
+    b =  pgm_read_byte(&gamma[b]);
+    
+    if(mode == 1) {
+    r *= correction;
+    g *= correction;
+    b *= correction;
+    }
+      int point = 0;
+      for(int i=0; i<NUMPIXELS; i++) {
+        pixels.setPixelColor(i, r,g,b);
+        /*
+        if(point == 0) pixels.setPixelColor(i, r,r,r);
+        else if(point == 1) pixels.setPixelColor(i, g,g,g);
+        else if(point == 2) pixels.setPixelColor(i, b,b,b);
+        point++;
+        if(point == 3) point = 0;
+        */
+      }
+      pixels.show();
+      //delay(wait);
+
+      Serial.print(mHour);
+      Serial.print(":");
+      Serial.print(mMinute);
+      Serial.print(":");
+      Serial.println(mSecond);
+      //delay(999);
+    }
 }
 
 boolean getPositive(int a, int b) {
