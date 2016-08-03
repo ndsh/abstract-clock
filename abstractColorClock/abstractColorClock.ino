@@ -122,7 +122,19 @@ void loop() {
     }
   }
   if(setupMode) { // fc: we're entering corneria city now.
-    
+    int sekunde, minute, stunde, tag, wochentag, monat, jahr;
+    int mPressed = 0;
+    if (button2.pressed()) {
+      mPressed = 1;
+    }
+    if (button3.pressed()) {
+      mPressed = -1;
+    }
+
+    if(mPressed != 0) {
+      //mHour = getHour(mHour, true);
+      Serial.println("button");
+    }
     for(int i=0; i<NUMPIXELS; i++) {
       pixels.setPixelColor(i, 0,0,0);
     }
@@ -203,4 +215,37 @@ int getNewValue(int step, int a, int b) {
   } else {
     return (a-getNewPosition(step, a, b));
   }
+}
+
+
+int getHour(int _mHour, bool dir) {
+  if(dir) {
+    _mHour++;
+    _mHour%=24;
+  } else {
+    _mHour--;
+    if(_mHour == -1) _mHour = 23;
+  }
+  return _mHour;
+}
+
+void setHour(int _mHour) {
+  mHour = _mHour;
+}
+
+int getMinute(int _mMinute, int _mHour, bool dir) {
+  if(dir) {
+    _mMinute++;
+    if(_mMinute%60 == 0) {
+      _mMinute%=60;
+      setHour(getHour(_mHour, true));
+    }
+  } else {
+    _mMinute--;
+    if(_mMinute == -1) {
+        _mMinute = 59;
+        setHour(getHour(_mHour, false));
+      }
+  }
+  return _mMinute;
 }
