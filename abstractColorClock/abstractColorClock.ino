@@ -110,6 +110,10 @@ void setup() {
 void loop() {
   if (button1.pressed()) {
     setupMode = !setupMode;
+    if(setupMode == true) {
+      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, 0,0,0);
+      pixels.show();
+    }
   }
   if(!debug) {
     tmElements_t tm;
@@ -182,7 +186,18 @@ void loop() {
       
       if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
         colorWipePreviousMillis = millis();
-          pixels.setPixelColor(currentPixel, hours2color[currentHour][0],hours2color[currentHour][1],hours2color[currentHour][2]);
+          int tR = pgm_read_byte(&gamma[hours2color[currentHour][0]]);
+          int tG = pgm_read_byte(&gamma[hours2color[currentHour][1]]);
+          int tB = pgm_read_byte(&gamma[hours2color[currentHour][2]]);
+
+          if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
+            tR *= correction;
+            tG *= correction;
+            tB *= correction;
+          }
+          pixels.setPixelColor(currentPixel, tR,tG,tB);
+          pixels.setPixelColor((currentPixel+1)%10, tR,tG,tB);
+          pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
           pixels.show();
           int j = currentPixel;
           j--;
@@ -222,7 +237,8 @@ void loop() {
     g =  pgm_read_byte(&gamma[g]);
     b =  pgm_read_byte(&gamma[b]);
     
-    if(mode == 1) {
+    // if(mode == 1) {
+    if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
     r *= correction;
     g *= correction;
     b *= correction;
