@@ -27,6 +27,8 @@ const uint8_t PROGMEM gamma[] = {
 
 #define PIN            6
 #define NUMPIXELS      10
+#define DS1307_ADRESSE 0x68 // I2C Addresse
+
 
 int r = 0;
 int g = 0;
@@ -49,6 +51,13 @@ Button button1(2); // Connect your button between pin 2 and GND
 Button button2(3); // Connect your button between pin 3 and GND
 Button button3(4); // Connect your button between pin 4 and GND
 bool setupMode;
+
+int tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
+
+unsigned long pixelsInterval=200; // the time we need to wait
+unsigned long colorWipePreviousMillis=0;
+int colorWipe = 0;
+uint16_t currentPixel = 0;// what pixel are we operating on
 
 int hours2color[12][3] = {
   { 20, 24, 39 },
@@ -94,6 +103,8 @@ void setup() {
   button3.begin();
 
   setupMode = false;
+
+   currentPixel = 0;
 }
 
 void loop() {
@@ -122,23 +133,71 @@ void loop() {
     }
   }
   if(setupMode) { // fc: we're entering corneria city now.
-    int sekunde, minute, stunde, tag, wochentag, monat, jahr;
+    
     int mPressed = 0;
     if (button2.pressed()) {
-      mPressed = 1;
+      mPressed = -1;
     }
     if (button3.pressed()) {
-      mPressed = -1;
+      mPressed = 1;
     }
 
     if(mPressed != 0) {
       //mHour = getHour(mHour, true);
-      Serial.println("button");
+      ausgabe();
+
+      Wire.beginTransmission(DS1307_ADRESSE);
+      Wire.write(0x00);
+      Wire.write(decToBcd(tSekunde));
+      Wire.write(decToBcd(tMinute));
+      if(mPressed == -1) Wire.write(decToBcd(getHour(mHour,false)));
+      else if(mPressed == 1) Wire.write(decToBcd(getHour(mHour,true)));
+      Wire.write(decToBcd(tWochentag));
+      Wire.write(decToBcd(tTag));
+      Wire.write(decToBcd(tMonat));
+      Wire.write(decToBcd(tJahr));
+      Wire.write(0x00);
+      Wire.endTransmission();
+      
     }
-    for(int i=0; i<NUMPIXELS; i++) {
-      pixels.setPixelColor(i, 0,0,0);
-    }
-    pixels.show();
+
+    tmElements_t tm;
+      if (RTC.read(tm)) {
+        mHour = tm.Hour;
+      }
+      Serial.println(mHour);
+
+      beforeNoon = (mHour<=11?true:false);
+      currentHour = mHour;
+      nextHour = (currentHour+1)%12;
+      if(nextHour==0) nextHour = currentHour;
+      
+      if(!beforeNoon) {
+        deltaNoon = (mHour-12)+1;
+        theOdd = (deltaNoon*2)-1;
+        currentHour = mHour-theOdd;
+        nextHour = (currentHour-1)%24;
+        if(nextHour == -1) nextHour = 0;    
+      }  
+      
+      if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
+        colorWipePreviousMillis = millis();
+          pixels.setPixelColor(currentPixel, hours2color[currentHour][0],hours2color[currentHour][1],hours2color[currentHour][2]);
+          pixels.show();
+          int j = currentPixel;
+          j--;
+          if(j==-1) j = 9;
+          pixels.setPixelColor(j, 0,0,0);
+          pixels.show();
+          currentPixel++;
+          if(currentPixel == NUMPIXELS) currentPixel = 0;
+      }
+
+      
+      
+    
+    
+    
   } else { // fl: this is horrible
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
@@ -182,11 +241,13 @@ void loop() {
       pixels.show();
       //delay(wait);
 
+/*
       Serial.print(mHour);
       Serial.print(":");
       Serial.print(mMinute);
       Serial.print(":");
       Serial.println(mSecond);
+      */
       //delay(999);
     }
 }
@@ -248,4 +309,32 @@ int getMinute(int _mMinute, int _mHour, bool dir) {
       }
   }
   return _mMinute;
+}
+
+void ausgabe(){
+  // True=Zeit ausgeben. False = Datum ausgeben
+ 
+  // Initialisieren
+  Wire.beginTransmission(DS1307_ADRESSE);
+  Wire.write(0x00);
+  Wire.endTransmission();
+ 
+  Wire.requestFrom(DS1307_ADRESSE, 7);
+ 
+  tSekunde = bcdToDec(Wire.read());
+  tMinute = bcdToDec(Wire.read());
+  tStunde = bcdToDec(Wire.read() & 0b111111);
+  tWochentag = bcdToDec(Wire.read());
+  tTag = bcdToDec(Wire.read());
+  tMonat = bcdToDec(Wire.read());
+  tJahr = bcdToDec(Wire.read());
+
+}
+
+// Hilfsfunktionen
+byte decToBcd(byte val) {
+  return ((val/10*16) + (val%10));
+}
+byte bcdToDec(byte val) {
+  return ((val/16*10) + (val%16));
 }
