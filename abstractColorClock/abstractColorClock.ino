@@ -178,14 +178,19 @@ void loop() {
 
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
-    nextHour = (currentHour+1)%12;
+    
+    // nextHour = (currentHour+1)%12;
+    currentHour++;
+    nextHour = currentHour-12*(currentHour/12);
     if(nextHour==0) nextHour = currentHour;
     
     if(!beforeNoon) {
       deltaNoon = (mHour-12)+1;
       theOdd = (deltaNoon*2)-1;
       currentHour = mHour-theOdd;
-      nextHour = (currentHour-1)%24;
+      currentHour--;
+      // nextHour = (currentHour)%24;
+      nextHour = currentHour-24*(currentHour/24);
       if(nextHour == -1) nextHour = 0;    
     }  
     
@@ -201,8 +206,10 @@ void loop() {
         tB *= correction;
       }
       pixels.setPixelColor(currentPixel, tR,tG,tB);
-      pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
-      pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
+      // pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
+      // pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
+      pixels.setPixelColor((currentPixel+2)-10*((currentPixel+2)/10), tR,tG,tB);
+      pixels.setPixelColor((currentPixel+4)-10*((currentPixel+4)/10), tR,tG,tB);
       pixels.show();
       int j = currentPixel;
       j--;
@@ -221,14 +228,16 @@ void loop() {
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
-    nextHour = (currentHour+1)%12;
+    // nextHour = (currentHour+1)%12;
+    nextHour = currentHour-12*(currentHour/12);
     if(nextHour==0) nextHour = currentHour;
     
     if(!beforeNoon) {
       deltaNoon = (mHour-12)+1;
       theOdd = (deltaNoon*2)-1;
       currentHour = mHour-theOdd;
-      nextHour = (currentHour-1)%24;
+      // nextHour = (currentHour-1)%24;
+      nextHour = currentHour-24*(currentHour/24);
       if(nextHour == -1) nextHour = 0;    
     }  
 
@@ -294,7 +303,8 @@ int getNewValue(int step, int a, int b) {
 int getHour(int _mHour, bool dir) {
   if(dir) {
     _mHour++;
-    _mHour%=24;
+    // _mHour%=24;
+    _mHour=_mHour-24*(_mHour/24);
   } else {
     _mHour--;
     if(_mHour == -1) _mHour = 23;
@@ -309,8 +319,10 @@ void setHour(int _mHour) {
 int getMinute(int _mMinute, int _mHour, bool dir) {
   if(dir) {
     _mMinute++;
-    if(_mMinute%60 == 0) {
+    // if(_mMinute%60 == 0) {
+    if((_mMinute-60*(_mMinute/60)) == 0) {
       _mMinute%=60;
+      _mMinute=_mMinute-60*(_mMinute/60);
       setHour(getHour(_mHour, true));
     }
   } else {
@@ -342,8 +354,10 @@ void RTCoutput(){
 }
 // Helpers
 byte decToBcd(byte val) {
-  return ((val/10*16) + (val%10));
+  //return ((val/10*16) + (val%10));
+  return ((val/10*16) + (val-10*(val/10)));
 }
 byte bcdToDec(byte val) {
-  return ((val/16*10) + (val%16));
+  return ((val/16*10) + (val-16*(val/16)));
+  //return ((val/16*10) + (val%16));
 }
