@@ -1,3 +1,7 @@
+/*
+replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip-13-use-the-modulus-operator-with-caution/
+*/
+
 const uint8_t PROGMEM gamma[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
@@ -79,6 +83,8 @@ int hours2color[12][3] = {
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 int wait = 15; // delay for half a second
 
+tmElements_t tm;
+
 void setup() {
   #if defined (__AVR_ATtiny85__)
     if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
@@ -88,7 +94,7 @@ void setup() {
   Serial.begin(9600);
   pixels.begin(); // This initializes the NeoPixel library.
 
-  tmElements_t tm;
+  
   if (RTC.read(tm)) {
     mHour = tm.Hour;
     mMinute = tm.Minute;
@@ -116,7 +122,7 @@ void loop() {
     }
   }
   if(!debug) {
-    tmElements_t tm;
+    
     if (RTC.read(tm)) {
       mHour = tm.Hour;
       mMinute = tm.Minute;
@@ -136,8 +142,13 @@ void loop() {
       mHour = 0;
     }
   }
+
+  /* ++++++++++++++++++++++++++++++++++++
+  //
+  //            SETUP MODE
+  //
+  // +++++++++++++++++++++++++++++++++ */
   if(setupMode) { // fc: we're entering corneria city now.
-    
     int mPressed = 0;
     if (button2.pressed()) {
       mPressed = -1;
@@ -145,10 +156,8 @@ void loop() {
     if (button3.pressed()) {
       mPressed = 1;
     }
-
     if(mPressed != 0) {
-      //mHour = getHour(mHour, true);
-      ausgabe();
+      RTCoutput();
 
       Wire.beginTransmission(DS1307_ADRESSE);
       Wire.write(0x00);
@@ -162,57 +171,52 @@ void loop() {
       Wire.write(decToBcd(tJahr));
       Wire.write(0x00);
       Wire.endTransmission();
-      
     }
+     
+    mHour = tm.Hour;
+    Serial.println(mHour);
 
-    tmElements_t tm;
-      if (RTC.read(tm)) {
-        mHour = tm.Hour;
+    beforeNoon = (mHour<=11?true:false);
+    currentHour = mHour;
+    nextHour = (currentHour+1)%12;
+    if(nextHour==0) nextHour = currentHour;
+    
+    if(!beforeNoon) {
+      deltaNoon = (mHour-12)+1;
+      theOdd = (deltaNoon*2)-1;
+      currentHour = mHour-theOdd;
+      nextHour = (currentHour-1)%24;
+      if(nextHour == -1) nextHour = 0;    
+    }  
+    
+    if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
+      colorWipePreviousMillis = millis();
+      int tR = pgm_read_byte(&gamma[hours2color[currentHour][0]]);
+      int tG = pgm_read_byte(&gamma[hours2color[currentHour][1]]);
+      int tB = pgm_read_byte(&gamma[hours2color[currentHour][2]]);
+
+      if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
+        tR *= correction;
+        tG *= correction;
+        tB *= correction;
       }
-      Serial.println(mHour);
-
-      beforeNoon = (mHour<=11?true:false);
-      currentHour = mHour;
-      nextHour = (currentHour+1)%12;
-      if(nextHour==0) nextHour = currentHour;
-      
-      if(!beforeNoon) {
-        deltaNoon = (mHour-12)+1;
-        theOdd = (deltaNoon*2)-1;
-        currentHour = mHour-theOdd;
-        nextHour = (currentHour-1)%24;
-        if(nextHour == -1) nextHour = 0;    
-      }  
-      
-      if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
-        colorWipePreviousMillis = millis();
-          int tR = pgm_read_byte(&gamma[hours2color[currentHour][0]]);
-          int tG = pgm_read_byte(&gamma[hours2color[currentHour][1]]);
-          int tB = pgm_read_byte(&gamma[hours2color[currentHour][2]]);
-
-          if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
-            tR *= correction;
-            tG *= correction;
-            tB *= correction;
-          }
-          pixels.setPixelColor(currentPixel, tR,tG,tB);
-          pixels.setPixelColor((currentPixel+1)%10, tR,tG,tB);
-          pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
-          pixels.show();
-          int j = currentPixel;
-          j--;
-          if(j==-1) j = 9;
-          pixels.setPixelColor(j, 0,0,0);
-          pixels.show();
-          currentPixel++;
-          if(currentPixel == NUMPIXELS) currentPixel = 0;
-      }
-
-      
-      
-    
-    
-    
+      pixels.setPixelColor(currentPixel, tR,tG,tB);
+      pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
+      pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
+      pixels.show();
+      int j = currentPixel;
+      j--;
+      if(j==-1) j = 9;
+      pixels.setPixelColor(j, 0,0,0);
+      pixels.show();
+      currentPixel++;
+      if(currentPixel == NUMPIXELS) currentPixel = 0;
+    }
+  /* ++++++++++++++++++++++++++++++++++++
+  //
+  //            NORMAL MODE
+  //
+  // +++++++++++++++++++++++++++++++++ */
   } else { // fl: this is horrible
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
@@ -239,20 +243,13 @@ void loop() {
     
     // if(mode == 1) {
     if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
-    r *= correction;
-    g *= correction;
-    b *= correction;
+      r *= correction;
+      g *= correction;
+      b *= correction;
     }
       int point = 0;
       for(int i=0; i<NUMPIXELS; i++) {
         pixels.setPixelColor(i, r,g,b);
-        /*
-        if(point == 0) pixels.setPixelColor(i, r,r,r);
-        else if(point == 1) pixels.setPixelColor(i, g,g,g);
-        else if(point == 2) pixels.setPixelColor(i, b,b,b);
-        point++;
-        if(point == 3) point = 0;
-        */
       }
       pixels.show();
       //delay(wait);
@@ -294,7 +291,6 @@ int getNewValue(int step, int a, int b) {
   }
 }
 
-
 int getHour(int _mHour, bool dir) {
   if(dir) {
     _mHour++;
@@ -327,9 +323,7 @@ int getMinute(int _mMinute, int _mHour, bool dir) {
   return _mMinute;
 }
 
-void ausgabe(){
-  // True=Zeit ausgeben. False = Datum ausgeben
- 
+void RTCoutput(){
   // Initialisieren
   Wire.beginTransmission(DS1307_ADRESSE);
   Wire.write(0x00);
@@ -346,8 +340,7 @@ void ausgabe(){
   tJahr = bcdToDec(Wire.read());
 
 }
-
-// Hilfsfunktionen
+// Helpers
 byte decToBcd(byte val) {
   return ((val/10*16) + (val%10));
 }
