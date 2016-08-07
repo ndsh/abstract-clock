@@ -34,36 +34,36 @@ const uint8_t PROGMEM gamma[] = {
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 
 
-int r = 0;
-int g = 0;
-int b = 0;
+uint8_t r = 0;
+uint8_t g = 0;
+uint8_t b = 0;
 
-int mHour = 0;
-int mMinute = 0;
-int mSecond = 0;
-int nextHour = 0;
-int currentHour = 0;
-int mCurrentSeconds = 0;
-int deltaNoon = 0;
-int theOdd = 0;
+uint8_t mHour = 0;
+uint8_t mMinute = 0;
+uint8_t mSecond = 0;
+uint8_t nextHour = 0;
+uint8_t currentHour = 0;
+uint8_t mCurrentSeconds = 0;
+uint8_t deltaNoon = 0;
+uint8_t theOdd = 0;
 boolean beforeNoon = false;
 boolean debug = false;
 float correction = 2.0;
-int mode = 0;
+uint8_t mode = 0;
 
 Button button1(2); // Connect your button between pin 2 and GND
 Button button2(3); // Connect your button between pin 3 and GND
 Button button3(4); // Connect your button between pin 4 and GND
 bool setupMode;
 
-int tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
+uint8_t tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
 
 unsigned long pixelsInterval=200; // the time we need to wait
 unsigned long colorWipePreviousMillis=0;
-int colorWipe = 0;
+uint8_t colorWipe = 0;
 uint16_t currentPixel = 0;// what pixel are we operating on
 
-int hours2color[12][3] = {
+uint8_t hours2color[12][3] = {
   { 20, 24, 39 },
   { 6, 30, 64 },
   { 8, 41, 92 },
@@ -81,7 +81,7 @@ int hours2color[12][3] = {
 
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-int wait = 15; // delay for half a second
+uint8_t wait = 15; // delay for half a second
 
 tmElements_t tm;
 
@@ -100,9 +100,6 @@ void setup() {
     mMinute = tm.Minute;
     mSecond = tm.Second;
   }
-  //mHour = hour();
-  //mMinute = minute();
-  //mSecond = second();
 
   button1.begin();
   button2.begin();
