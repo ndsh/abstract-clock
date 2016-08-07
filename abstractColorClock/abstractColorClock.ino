@@ -34,36 +34,36 @@ const uint8_t PROGMEM gamma[] = {
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 
 
-int r = 0;
-int g = 0;
-int b = 0;
+uint8_t r = 0;
+uint8_t g = 0;
+uint8_t b = 0;
 
-int mHour = 0;
-int mMinute = 0;
-int mSecond = 0;
-int nextHour = 0;
-int currentHour = 0;
-int mCurrentSeconds = 0;
-int deltaNoon = 0;
-int theOdd = 0;
+uint8_t mHour = 0;
+uint8_t mMinute = 0;
+uint8_t mSecond = 0;
+uint8_t nextHour = 0;
+uint8_t currentHour = 0;
+uint8_t mCurrentSeconds = 0;
+uint8_t deltaNoon = 0;
+uint8_t theOdd = 0;
 boolean beforeNoon = false;
 boolean debug = false;
 float correction = 2.0;
-int mode = 0;
+uint8_t mode = 0;
 
 Button button1(2); // Connect your button between pin 2 and GND
 Button button2(3); // Connect your button between pin 3 and GND
 Button button3(4); // Connect your button between pin 4 and GND
 bool setupMode;
 
-int tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
+uint8_t tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
 
 unsigned long pixelsInterval=200; // the time we need to wait
 unsigned long colorWipePreviousMillis=0;
-int colorWipe = 0;
+uint8_t colorWipe = 0;
 uint16_t currentPixel = 0;// what pixel are we operating on
 
-int hours2color[12][3] = {
+uint8_t hours2color[12][3] = {
   { 20, 24, 39 },
   { 6, 30, 64 },
   { 8, 41, 92 },
@@ -81,7 +81,7 @@ int hours2color[12][3] = {
 
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-int wait = 15; // delay for half a second
+uint8_t wait = 15; // delay for half a second
 
 tmElements_t tm;
 
@@ -100,9 +100,6 @@ void setup() {
     mMinute = tm.Minute;
     mSecond = tm.Second;
   }
-  //mHour = hour();
-  //mMinute = minute();
-  //mSecond = second();
 
   button1.begin();
   button2.begin();
@@ -178,19 +175,14 @@ void loop() {
 
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
-    
-    // nextHour = (currentHour+1)%12;
-    currentHour++;
-    nextHour = currentHour-12*(currentHour/12);
+    nextHour = (currentHour+1)%12;
     if(nextHour==0) nextHour = currentHour;
     
     if(!beforeNoon) {
       deltaNoon = (mHour-12)+1;
       theOdd = (deltaNoon*2)-1;
       currentHour = mHour-theOdd;
-      currentHour--;
-      // nextHour = (currentHour)%24;
-      nextHour = currentHour-24*(currentHour/24);
+      nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
     }  
     
@@ -206,10 +198,8 @@ void loop() {
         tB *= correction;
       }
       pixels.setPixelColor(currentPixel, tR,tG,tB);
-      // pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
-      // pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
-      pixels.setPixelColor((currentPixel+2)-10*((currentPixel+2)/10), tR,tG,tB);
-      pixels.setPixelColor((currentPixel+4)-10*((currentPixel+4)/10), tR,tG,tB);
+      pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
+      pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
       pixels.show();
       int j = currentPixel;
       j--;
@@ -228,16 +218,14 @@ void loop() {
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
-    // nextHour = (currentHour+1)%12;
-    nextHour = currentHour-12*(currentHour/12);
+    nextHour = (currentHour+1)%12;
     if(nextHour==0) nextHour = currentHour;
     
     if(!beforeNoon) {
       deltaNoon = (mHour-12)+1;
       theOdd = (deltaNoon*2)-1;
       currentHour = mHour-theOdd;
-      // nextHour = (currentHour-1)%24;
-      nextHour = currentHour-24*(currentHour/24);
+      nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
     }  
 
@@ -303,8 +291,7 @@ int getNewValue(int step, int a, int b) {
 int getHour(int _mHour, bool dir) {
   if(dir) {
     _mHour++;
-    // _mHour%=24;
-    _mHour=_mHour-24*(_mHour/24);
+    _mHour%=24;
   } else {
     _mHour--;
     if(_mHour == -1) _mHour = 23;
@@ -319,10 +306,8 @@ void setHour(int _mHour) {
 int getMinute(int _mMinute, int _mHour, bool dir) {
   if(dir) {
     _mMinute++;
-    // if(_mMinute%60 == 0) {
-    if((_mMinute-60*(_mMinute/60)) == 0) {
+    if(_mMinute%60 == 0) {
       _mMinute%=60;
-      _mMinute=_mMinute-60*(_mMinute/60);
       setHour(getHour(_mHour, true));
     }
   } else {
@@ -354,10 +339,8 @@ void RTCoutput(){
 }
 // Helpers
 byte decToBcd(byte val) {
-  //return ((val/10*16) + (val%10));
-  return ((val/10*16) + (val-10*(val/10)));
+  return ((val/10*16) + (val%10));
 }
 byte bcdToDec(byte val) {
-  return ((val/16*10) + (val-16*(val/16)));
-  //return ((val/16*10) + (val%16));
+  return ((val/16*10) + (val%16));
 }
