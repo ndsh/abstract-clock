@@ -2,67 +2,57 @@
 replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip-13-use-the-modulus-operator-with-caution/
 */
 
-const uint8_t PROGMEM gamma[] = {
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
-    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
-    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
-    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
-    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
-   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
-   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
-   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
-   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
-   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
-   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
-   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
-  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
-  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
-  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
-  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
-  
-#include <Wire.h>
-#include <Time.h>
-#include <DS1307RTC.h>
+/*
+ * ok wichtig. PULLUPS benutzen für SDA/SCL
+ * und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
+ * den stream auslesen
+ */
+
+ /*
+ * attiny85:
+ * [x] d1: leds
+ * d0: sda
+ * d2: scl
+ * d4: button3
+ * d3: button2
+ * d5: button1
+ */
+
+// IMPORTS
+
 #include <Adafruit_NeoPixel.h>
 #include <Button.h>
-#ifdef __AVR__
-  #include <avr/power.h>
+#if defined (__AVR_ATtiny85__)
+  #include <TinyWireM.h>
+#else
+  #include <Wire.h>
 #endif
 
-#define PIN            6
-#define NUMPIXELS      10
+//READ ONLY
+const uint8_t mLeds= 6;
+const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 
-
-uint8_t r = 0;
-uint8_t g = 0;
-uint8_t b = 0;
-
-uint8_t mHour = 0;
-uint8_t mMinute = 0;
-uint8_t mSecond = 0;
-uint8_t nextHour = 0;
-uint8_t currentHour = 0;
-uint8_t mCurrentSeconds = 0;
-uint8_t deltaNoon = 0;
-uint8_t theOdd = 0;
-boolean beforeNoon = false;
-boolean debug = false;
-float correction = 2.0;
-uint8_t mode = 0;
-
-Button button1(2); // Connect your button between pin 2 and GND
-Button button2(3); // Connect your button between pin 3 and GND
-Button button3(4); // Connect your button between pin 4 and GND
+// GLOBAL
 bool setupMode;
 
-uint8_t tSekunde, tMinute, tStunde, tTag, tWochentag, tMonat, tJahr;
+unsigned long pixelsInterval = 200; // the time we need to wait
+unsigned long colorWipePreviousMillis = 0;
+uint16_t currentPixel = 0; // what pixel are we operating on
+float correction = 2.0; // gamma correction for night time
 
-unsigned long pixelsInterval=200; // the time we need to wait
-unsigned long colorWipePreviousMillis=0;
-uint8_t colorWipe = 0;
-uint16_t currentPixel = 0;// what pixel are we operating on
+boolean debug = false;
+uint8_t mSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
 
+
+// OBJECTS
+Button button1(2);
+Button button2(3);
+Button button3(4);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, mLeds, NEO_GRB + NEO_KHZ800);
+
+// ARRAYS
+extern const uint8_t gamma[];
 uint8_t hours2color[12][3] = {
   { 20, 24, 39 },
   { 6, 30, 64 },
@@ -80,51 +70,40 @@ uint8_t hours2color[12][3] = {
 
 
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-uint8_t wait = 15; // delay for half a second
 
-tmElements_t tm;
+void setup() { 
+//  Serial.begin(9600);
 
-void setup() {
-  #if defined (__AVR_ATtiny85__)
-    if (F_CPU == 16000000) clock_prescale_set(clock_div_1);
-  #endif
-  
-  while (!Serial) { }; // for Leos
-  Serial.begin(9600);
+  // initialize sub-routines
   pixels.begin(); // This initializes the NeoPixel library.
-
-  
-  if (RTC.read(tm)) {
-    mHour = tm.Hour;
-    mMinute = tm.Minute;
-    mSecond = tm.Second;
-  }
-
   button1.begin();
   button2.begin();
   button3.begin();
 
   setupMode = false;
-
-   currentPixel = 0;
+  currentPixel = 0;
 }
 
 void loop() {
+  uint8_t nextHour = 0;
+  uint8_t currentHour = 0;
+  uint8_t mCurrentSeconds = 0;
+  uint8_t deltaNoon = 0;
+  uint8_t theOdd = 0;
+  boolean beforeNoon = false;
+  uint8_t red = 0;
+  uint8_t green = 0;
+  uint8_t blue = 0;
+  
   if (button1.pressed()) {
     setupMode = !setupMode;
     if(setupMode == true) {
-      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, 0,0,0);
+      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i,0,0,0);
       pixels.show();
     }
   }
   if(!debug) {
-    
-    if (RTC.read(tm)) {
-      mHour = tm.Hour;
-      mMinute = tm.Minute;
-      mSecond = tm.Second;
-    }
+    RTCoutput();
   } else {
     mSecond += 10;
     if(mSecond >= 60) {
@@ -145,8 +124,8 @@ void loop() {
   //            SETUP MODE
   //
   // +++++++++++++++++++++++++++++++++ */
-  if(setupMode) { // fc: we're entering corneria city now.
-    int mPressed = 0;
+  if(setupMode) {
+    uint8_t mPressed = 0;
     if (button2.pressed()) {
       mPressed = -1;
     }
@@ -154,29 +133,34 @@ void loop() {
       mPressed = 1;
     }
     if(mPressed != 0) {
-      RTCoutput();
-
+      #if defined (__AVR_ATtiny85__)
+      TinyWireM.beginTransmission(DS1307_ADRESSE);
+      #else
       Wire.beginTransmission(DS1307_ADRESSE);
-      Wire.write(0x00);
-      Wire.write(decToBcd(tSekunde));
-      Wire.write(decToBcd(tMinute));
-      if(mPressed == -1) Wire.write(decToBcd(getHour(mHour,false)));
-      else if(mPressed == 1) Wire.write(decToBcd(getHour(mHour,true)));
-      Wire.write(decToBcd(tWochentag));
-      Wire.write(decToBcd(tTag));
-      Wire.write(decToBcd(tMonat));
-      Wire.write(decToBcd(tJahr));
-      Wire.write(0x00);
+      #endif
+      
+      wireWrite(0x00);
+      wireWrite(decToBcd(mSecond));
+      wireWrite(decToBcd(mMinute));
+      if(mPressed == -1) wireWrite(decToBcd(getHour(mHour,false)));
+      else if(mPressed == 1) wireWrite(decToBcd(getHour(mHour,true)));
+      wireWrite(decToBcd(mWeekday));
+      wireWrite(decToBcd(mDay));
+      wireWrite(decToBcd(mMonth));
+      wireWrite(decToBcd(mYear));
+      wireWrite(0x00);
+      #if defined (__AVR_ATtiny85__)
+      TinyWireM.endTransmission();
+      #else
       Wire.endTransmission();
+      #endif
+      RTCoutput(); // korrekt hier? oder außerbalb der schleife
     }
-     
-    mHour = tm.Hour;
-    Serial.println(mHour);
 
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
     nextHour = (currentHour+1)%12;
-    if(nextHour==0) nextHour = currentHour;
+    if(nextHour == 0) nextHour = currentHour;
     
     if(!beforeNoon) {
       deltaNoon = (mHour-12)+1;
@@ -188,23 +172,15 @@ void loop() {
     
     if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
       colorWipePreviousMillis = millis();
-      int tR = pgm_read_byte(&gamma[hours2color[currentHour][0]]);
-      int tG = pgm_read_byte(&gamma[hours2color[currentHour][1]]);
-      int tB = pgm_read_byte(&gamma[hours2color[currentHour][2]]);
-
-      if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
-        tR *= correction;
-        tG *= correction;
-        tB *= correction;
-      }
-      pixels.setPixelColor(currentPixel, tR,tG,tB);
-      pixels.setPixelColor((currentPixel+2)%10, tR,tG,tB);
-      pixels.setPixelColor((currentPixel+4)%10, tR,tG,tB);
+      red = hours2color[currentHour][0];
+      green = hours2color[currentHour][1];
+      blue = hours2color[currentHour][2];
+      setPixelColorWrapper(currentPixel, red, green, blue, currentHour);
       pixels.show();
       int j = currentPixel;
       j--;
       if(j==-1) j = 9;
-      pixels.setPixelColor(j, 0,0,0);
+      pixels.setPixelColor(j,0,0,0);
       pixels.show();
       currentPixel++;
       if(currentPixel == NUMPIXELS) currentPixel = 0;
@@ -214,7 +190,7 @@ void loop() {
   //            NORMAL MODE
   //
   // +++++++++++++++++++++++++++++++++ */
-  } else { // fl: this is horrible
+  } else {
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
@@ -227,46 +203,33 @@ void loop() {
       currentHour = mHour-theOdd;
       nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
-    }  
-
-    
-    r = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
-    g = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
-    b = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
-
-    r =  pgm_read_byte(&gamma[r]);
-    g =  pgm_read_byte(&gamma[g]);
-    b =  pgm_read_byte(&gamma[b]);
-    
-    // if(mode == 1) {
-    if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
-      r *= correction;
-      g *= correction;
-      b *= correction;
     }
-      int point = 0;
-      for(int i=0; i<NUMPIXELS; i++) {
-        pixels.setPixelColor(i, r,g,b);
-      }
-      pixels.show();
-      //delay(wait);
-
-/*
-      Serial.print(mHour);
-      Serial.print(":");
-      Serial.print(mMinute);
-      Serial.print(":");
-      Serial.println(mSecond);
-      */
-      //delay(999);
-    }
+    red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
+    green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
+    blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
+    
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
+    pixels.show();
+  }
 }
 
-boolean getPositive(int a, int b) {
+void setPixelColorWrapper(uint8_t pixel, uint8_t r, uint8_t g, uint8_t b, uint8_t currentHour) {
+  r =  pgm_read_byte(&gamma[r]);
+  g =  pgm_read_byte(&gamma[g]);
+  b =  pgm_read_byte(&gamma[b]);
+  if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
+    r *= correction;
+    g *= correction;
+    b *= correction;
+  }
+  pixels.setPixelColor(pixel, r, g, b);
+}
+
+boolean getPositive(uint8_t a, uint8_t b) {
   return (b-a>0?true:false);
 }
 
-int getNewPosition(int step, int a, int b) {
+uint8_t getNewPosition(uint8_t step, uint8_t a, uint8_t b) {
   float mBucket = 0;
   float mCalculatedStep = (abs(b-a))/3600.0;
   int mNewPosition = 0;
@@ -280,7 +243,7 @@ int getNewPosition(int step, int a, int b) {
   return mNewPosition;
 }
 
-int getNewValue(int step, int a, int b) {
+uint8_t getNewValue(int step, int a, int b) {
   if(getPositive(a, b)) {
     return (a+getNewPosition(step, a, b));
   } else {
@@ -288,7 +251,7 @@ int getNewValue(int step, int a, int b) {
   }
 }
 
-int getHour(int _mHour, bool dir) {
+uint8_t getHour(uint8_t _mHour, bool dir) {
   if(dir) {
     _mHour++;
     _mHour%=24;
@@ -303,7 +266,7 @@ void setHour(int _mHour) {
   mHour = _mHour;
 }
 
-int getMinute(int _mMinute, int _mHour, bool dir) {
+uint8_t getMinute(uint8_t _mMinute, uint8_t _mHour, bool dir) {
   if(dir) {
     _mMinute++;
     if(_mMinute%60 == 0) {
@@ -321,21 +284,32 @@ int getMinute(int _mMinute, int _mHour, bool dir) {
 }
 
 void RTCoutput(){
-  // Initialisieren
+  // initialize and point at head
+  #if defined (__AVR_ATtiny85__)
+  TinyWireM.beginTransmission(DS1307_ADRESSE);
+  #else
   Wire.beginTransmission(DS1307_ADRESSE);
-  Wire.write(0x00);
+  #endif
+  wireWrite(0x00);
+  #if defined (__AVR_ATtiny85__)
+  TinyWireM.endTransmission();
+  #else
   Wire.endTransmission();
- 
-  Wire.requestFrom(DS1307_ADRESSE, 7);
- 
-  tSekunde = bcdToDec(Wire.read());
-  tMinute = bcdToDec(Wire.read());
-  tStunde = bcdToDec(Wire.read() & 0b111111);
-  tWochentag = bcdToDec(Wire.read());
-  tTag = bcdToDec(Wire.read());
-  tMonat = bcdToDec(Wire.read());
-  tJahr = bcdToDec(Wire.read());
+  #endif
 
+  #if defined (__AVR_ATtiny85__)
+  TinyWireM.requestFrom(DS1307_ADRESSE, 7);
+  #else
+  Wire.requestFrom(DS1307_ADRESSE, 7);
+  #endif
+ 
+  mSecond = bcdToDec(wireRead());
+  mMinute = bcdToDec(wireRead());
+  mHour = bcdToDec(wireRead() & 0b111111);
+  mWeekday = bcdToDec(wireRead());
+  mDay = bcdToDec(wireRead());
+  mMonth = bcdToDec(wireRead());
+  mYear = bcdToDec(wireRead());
 }
 // Helpers
 byte decToBcd(byte val) {
@@ -344,3 +318,39 @@ byte decToBcd(byte val) {
 byte bcdToDec(byte val) {
   return ((val/16*10) + (val%16));
 }
+
+int wireRead() {
+  #if defined (__AVR_ATtiny85__)
+  TinyWireM.receive();
+  #else
+  Wire.read();
+  #endif
+  
+}
+
+void wireWrite(byte b) {
+  #if defined (__AVR_ATtiny85__)
+  TinyWireM.send(b);
+  #else
+  Wire.write(b);
+  #endif
+  
+}
+
+const uint8_t PROGMEM gamma[] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
+    1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
+    2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  5,  5,  5,
+    5,  6,  6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9, 10,
+   10, 10, 11, 11, 11, 12, 12, 13, 13, 13, 14, 14, 15, 15, 16, 16,
+   17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+   25, 26, 27, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36,
+   37, 38, 39, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 50,
+   51, 52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 67, 68,
+   69, 70, 72, 73, 74, 75, 77, 78, 79, 81, 82, 83, 85, 86, 87, 89,
+   90, 92, 93, 95, 96, 98, 99,101,102,104,105,107,109,110,112,114,
+  115,117,119,120,122,124,126,127,129,131,133,135,137,138,140,142,
+  144,146,148,150,152,154,156,158,160,162,164,167,169,171,173,175,
+  177,180,182,184,186,189,191,193,196,198,200,203,205,208,210,213,
+  215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255 };
