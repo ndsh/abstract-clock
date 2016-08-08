@@ -18,6 +18,14 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
  * d5: button1
  */
 
+ /* todo list: 
+  [] photo resistor
+  [] start up sequence
+  [] secret button codes
+  [] replace modulo operations
+  [] better setup mode sequence (fade?)
+*/
+
 // IMPORTS
 
 #include <Adafruit_NeoPixel.h>
@@ -32,6 +40,7 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
 const uint8_t mLeds= 6;
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
+const boolean debug = false;
 
 // GLOBAL
 bool setupMode;
@@ -41,7 +50,6 @@ unsigned long colorWipePreviousMillis = 0;
 uint16_t currentPixel = 0; // what pixel are we operating on
 float correction = 2.0; // gamma correction for night time
 
-boolean debug = false;
 uint8_t mSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
 
 
@@ -75,13 +83,36 @@ void setup() {
 //  Serial.begin(9600);
 
   // initialize sub-routines
-  pixels.begin(); // This initializes the NeoPixel library.
+  pixels.begin();
   button1.begin();
   button2.begin();
   button3.begin();
 
   setupMode = false;
   currentPixel = 0;
+
+  // START UP SEQUENCE
+  
+  // fade in "white"
+  for(int j = 0; j<255; j++) {
+    for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
+    pixels.show();
+  }
+  
+  // flash through all of the colors. BAM! BAM! BAM!
+  for(int j = 0; j<12; j++) {
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
+    pixels.show();
+  }
+  // and one more for the reverse colors
+  for(int j = 12; j>=0; j--) {
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
+    pixels.show();
+  }
+
+  // maybe fade out
+  // and then fade to the currentHours array?
+  
 }
 
 void loop() {
