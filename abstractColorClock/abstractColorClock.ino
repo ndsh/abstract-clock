@@ -7,29 +7,74 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
  * und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
  * den stream auslesen
  */
+ /*
+  * 1st button: under 800
+  * 2nd button: >= 800 && < 1000
+  * 3rd button: > 1000
+  */
+
+  /* buttons:
+     http://damienclarke.me/code/analog-multi-button
+   */
+ /*
+
+                               +-----+
+         +----[PWR]-------------------| USB |--+
+         |                            +-----+  |
+         |         GND/RST2  [ ][ ]            |
+         |       MOSI2/SCK2  [ ][ ]  A5/SCL[ ] |   C5 
+         |          5V/MISO2 [ ][ ]  A4/SDA[ ] |   C4 
+         |                             AREF[ ] |
+         |                              GND[ ] |
+         | [ ]N/C                    SCK/13[ ] |   B5
+         | [ ]IOREF                 MISO/12[ ] |   .
+         | [ ]RST                   MOSI/11[ ]~|   .
+         | [ ]3V3    +---+               10[ ]~|   .
+         | [ ]5v    -| A |-               9[ ]~|   .
+         | [ ]GND   -| R |-               8[ ] |   B0
+         | [X]GND   -| D |-                    |
+         | [X]Vin   -| U |-               7[ ] |   D7
+         |          -| I |-               6[X]~|   .
+         | [/]A0    -| N |-               5[ ]~|   .
+         | [ ]A1    -| O |-               4[X] |   .
+         | [ ]A2     +---+           INT1/3[X]~|   .
+         | [ ]A3                     INT0/2[X] |   .
+         | [X]A4/SDA  RST SCK MISO     TX>1[ ] |   .
+         | [X]A5/SCL  [ ] [ ] [ ]      RX<0[ ] |   D0
+         |            [ ] [ ] [ ]              |
+         |  UNO_R3    GND MOSI 5V  ____________/
+          \_______________________/
+*/
 
  /*
  * attiny85:
- * [x] d1: leds
- * d0: sda
- * d2: scl
- * d4: button3
- * d3: button2
- * d5: button1
+ * d1: leds
+ * d0 : sda
+ * d2 : scl
+ * d4 : button3
+ * d3 : button2
+ * d5 : button1
+ * d? : photo resistor
  */
 
  /* todo list: 
-  [] photo resistor
-  [] start up sequence
-  [] secret button codes
-  [] replace modulo operations
-  [] better setup mode sequence (fade?)
+  [ ] photo resistor
+  [/] start up sequence
+  [ ] secret button codes
+  [ ] replace modulo operations
+  [ ] better setup mode sequence (fade?)
+  [ ] shift register for buttons
 */
+
+/* photores
+  analogRead(lightPin)/4);  //you have  to divide the value. for example, 
+                            //with a 10k resistor divide the value by 2, for 100k resistor divide by 4.
+ */
 
 // IMPORTS
 
 #include <Adafruit_NeoPixel.h>
-#include <Button.h>
+#include <AnalogMultiButton.h>
 #if defined (__AVR_ATtiny85__)
   #include <TinyWireM.h>
 #else
@@ -38,9 +83,17 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
 
 //READ ONLY
 const uint8_t mLeds= 6;
+const uint8_t mButtons = A0;
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 const boolean debug = false;
+const int BUTTONS_PIN = A0;
+const int BUTTONS_TOTAL = 3;
+const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
+const int BUTTON_SELECT = 0;
+const int BUTTON_DOWN = 1;
+const int BUTTON_UP = 2;
+const int startup = false;
 
 // GLOBAL
 bool setupMode;
@@ -50,14 +103,13 @@ unsigned long colorWipePreviousMillis = 0;
 uint16_t currentPixel = 0; // what pixel are we operating on
 float correction = 2.0; // gamma correction for night time
 
-uint8_t mSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
+uint8_t mSecond, mMinute, mDay, mWeekday, mMonth, mYear;
+int mHour;
 
 
 // OBJECTS
-Button button1(2);
-Button button2(3);
-Button button3(4);
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, mLeds, NEO_GRB + NEO_KHZ800);
+AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
 
 // ARRAYS
 extern const uint8_t gamma[];
@@ -80,42 +132,48 @@ uint8_t hours2color[12][3] = {
 
 
 void setup() { 
-//  Serial.begin(9600);
+  #if defined (__AVR_ATtiny85__)
+    TinyWireM.begin();
+  #else
+    Serial.begin(9600);
+    Wire.begin();
+    RTCoutput();
+    Serial.print(mHour);
+    Serial.print(":");
+    Serial.println(mMinute);
+  #endif
+  
 
   // initialize sub-routines
   pixels.begin();
-  button1.begin();
-  button2.begin();
-  button3.begin();
 
   setupMode = false;
   currentPixel = 0;
 
   // START UP SEQUENCE
+  if(startup) {
+    // fade in "white"
+    for(int j = 0; j<255; j++) {
+      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
+      pixels.show();
+      delay(20);
+    }
+    
+    // flash through all of the colors. BAM! BAM! BAM!
+    for(int j = 0; j<12; j++) {
+      for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
+      pixels.show();
+      delay(100);
+    }
   
-  // fade in "white"
-  for(int j = 0; j<255; j++) {
-    for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
-    pixels.show();
+    // maybe fade out
+    // and then fade to the currentHours array?
   }
-  
-  // flash through all of the colors. BAM! BAM! BAM!
-  for(int j = 0; j<12; j++) {
-    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
-    pixels.show();
-  }
-  // and one more for the reverse colors
-  for(int j = 12; j>=0; j--) {
-    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
-    pixels.show();
-  }
-
-  // maybe fade out
-  // and then fade to the currentHours array?
-  
 }
 
 void loop() {
+  buttons.update();
+  
   uint8_t nextHour = 0;
   uint8_t currentHour = 0;
   uint8_t mCurrentSeconds = 0;
@@ -126,7 +184,7 @@ void loop() {
   uint8_t green = 0;
   uint8_t blue = 0;
   
-  if (button1.pressed()) {
+  if(buttons.onRelease(BUTTON_SELECT)) {
     setupMode = !setupMode;
     if(setupMode == true) {
       for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i,0,0,0);
@@ -156,38 +214,56 @@ void loop() {
   //
   // +++++++++++++++++++++++++++++++++ */
   if(setupMode) {
-    uint8_t mPressed = 0;
-    if (button2.pressed()) {
+    int mPressed = 0;
+    
+    if(buttons.onRelease(BUTTON_DOWN)) { // down button
       mPressed = -1;
+      Serial.println("down");
     }
-    if (button3.pressed()) {
+    if(buttons.onRelease(BUTTON_UP)) { // up button
       mPressed = 1;
+      Serial.println("up");
     }
+    #if defined (__AVR_ATtiny85__)
+    #else
+      if(mPressed != 0) {
+      Serial.print("##### \t");
+      Serial.println(mPressed);
+      }
+    #endif
     if(mPressed != 0) {
       #if defined (__AVR_ATtiny85__)
-      TinyWireM.beginTransmission(DS1307_ADRESSE);
+        TinyWireM.beginTransmission(DS1307_ADRESSE);
+        TinyWireM.send(0x00);
+        TinyWireM.send(decToBcd(mSecond));
+        TinyWireM.send(decToBcd(mMinute));
+        if(mPressed == -1) TinyWireM.send(decToBcd(getHour(mHour,false)));
+        else if(mPressed == 1) TinyWireM.send(decToBcd(getHour(mHour,true)));
+        TinyWireM.send(decToBcd(mWeekday));
+        TinyWireM.send(decToBcd(mDay));
+        TinyWireM.send(decToBcd(mMonth));
+        TinyWireM.send(decToBcd(mYear));
+        TinyWireM.send(0x00);
+        TinyWireM.endTransmission();
       #else
-      Wire.beginTransmission(DS1307_ADRESSE);
-      #endif
-      
-      wireWrite(0x00);
-      wireWrite(decToBcd(mSecond));
-      wireWrite(decToBcd(mMinute));
-      if(mPressed == -1) wireWrite(decToBcd(getHour(mHour,false)));
-      else if(mPressed == 1) wireWrite(decToBcd(getHour(mHour,true)));
-      wireWrite(decToBcd(mWeekday));
-      wireWrite(decToBcd(mDay));
-      wireWrite(decToBcd(mMonth));
-      wireWrite(decToBcd(mYear));
-      wireWrite(0x00);
-      #if defined (__AVR_ATtiny85__)
-      TinyWireM.endTransmission();
-      #else
-      Wire.endTransmission();
+        Wire.beginTransmission(DS1307_ADRESSE);
+        Wire.write(0x00);
+        Wire.write(decToBcd(mSecond));
+        Wire.write(decToBcd(mMinute));
+        if(mPressed == -1) Wire.write(decToBcd(getHour(mHour,false)));
+        else if(mPressed == 1) Wire.write(decToBcd(getHour(mHour,true)));
+        Wire.write(decToBcd(mWeekday));
+        Wire.write(decToBcd(mDay));
+        Wire.write(decToBcd(mMonth));
+        Wire.write(decToBcd(mYear));
+        Wire.write(0x00);
+        Wire.endTransmission();
       #endif
       RTCoutput(); // korrekt hier? oder außerbalb der schleife
+      Serial.print(mHour);
+      Serial.print(":");
+      Serial.println(mMinute);
     }
-
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
     nextHour = (currentHour+1)%12;
@@ -248,6 +324,7 @@ void setPixelColorWrapper(uint8_t pixel, uint8_t r, uint8_t g, uint8_t b, uint8_
   r =  pgm_read_byte(&gamma[r]);
   g =  pgm_read_byte(&gamma[g]);
   b =  pgm_read_byte(&gamma[b]);
+  
   if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
     r *= correction;
     g *= correction;
@@ -282,7 +359,7 @@ uint8_t getNewValue(int step, int a, int b) {
   }
 }
 
-uint8_t getHour(uint8_t _mHour, bool dir) {
+int getHour(int _mHour, bool dir) {
   if(dir) {
     _mHour++;
     _mHour%=24;
@@ -316,31 +393,23 @@ uint8_t getMinute(uint8_t _mMinute, uint8_t _mHour, bool dir) {
 
 void RTCoutput(){
   // initialize and point at head
+  // read/write is normal!!
   #if defined (__AVR_ATtiny85__)
-  TinyWireM.beginTransmission(DS1307_ADRESSE);
   #else
-  Wire.beginTransmission(DS1307_ADRESSE);
+    Wire.beginTransmission(DS1307_ADRESSE);
+    Wire.write(0x00);
+    Wire.endTransmission();
+   
+    Wire.requestFrom(DS1307_ADRESSE, 7);
+   
+    mSecond = bcdToDec(Wire.read());
+    mMinute = bcdToDec(Wire.read());
+    mHour = bcdToDec(Wire.read() & 0b111111);
+    mWeekday = bcdToDec(Wire.read());
+    mDay = bcdToDec(Wire.read());
+    mMonth = bcdToDec(Wire.read());
+    mYear = bcdToDec(Wire.read());
   #endif
-  wireWrite(0x00);
-  #if defined (__AVR_ATtiny85__)
-  TinyWireM.endTransmission();
-  #else
-  Wire.endTransmission();
-  #endif
-
-  #if defined (__AVR_ATtiny85__)
-  TinyWireM.requestFrom(DS1307_ADRESSE, 7);
-  #else
-  Wire.requestFrom(DS1307_ADRESSE, 7);
-  #endif
- 
-  mSecond = bcdToDec(wireRead());
-  mMinute = bcdToDec(wireRead());
-  mHour = bcdToDec(wireRead() & 0b111111);
-  mWeekday = bcdToDec(wireRead());
-  mDay = bcdToDec(wireRead());
-  mMonth = bcdToDec(wireRead());
-  mYear = bcdToDec(wireRead());
 }
 // Helpers
 byte decToBcd(byte val) {
@@ -350,7 +419,7 @@ byte bcdToDec(byte val) {
   return ((val/16*10) + (val%16));
 }
 
-int wireRead() {
+byte wireRead() {
   #if defined (__AVR_ATtiny85__)
   TinyWireM.receive();
   #else
