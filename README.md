@@ -9,13 +9,11 @@ an abstract light clock running on arduino uno + rtc to drive neopixels into dif
 
 **dependencies**
 
-* Time.h
-
-
-* DS1307RTC.h
+* Wire.h (ATMega328p) or TinyWireM.h (https://github.com/adafruit/TinyWireM)
 
 
 * Adafruit_NeoPixel.h
+* Analog MultiButton (http://damienclarke.me/code/analog-multi-button)
 
 **how does it work?**
 
