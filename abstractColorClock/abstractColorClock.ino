@@ -11,17 +11,6 @@
 /* buttons:
   http://damienclarke.me/code/analog-multi-button
  */
- 
- /*
- * attiny85:
- * d1: leds
- * d0 : sda
- * d2 : scl
- * d4 : button3
- * d3 : button2
- * d5 : button1
- * d? : photo resistor
- */
 
  /* todo list: 
   [ ] photo resistor
@@ -145,8 +134,7 @@ void setup() {
       for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
       pixels.show();
       delay(20);
-    }
-    
+    }    
   }
 }
 
@@ -183,7 +171,6 @@ void loop() {
     }
     if(mHour >= 24) mHour = 0;
   }
-
   /* ++++++++++++++++++++++++++++++++++++
   //
   //            SETUP MODE
@@ -194,15 +181,16 @@ void loop() {
     
     if(buttons.onRelease(BUTTON_DOWN)) { // down button
       mPressed = -1;
-      SerialPrintln("down");
+      SerialPrint("down: ");
     }
     if(buttons.onRelease(BUTTON_UP)) { // up button
       mPressed = 1;
-      SerialPrintln("up");
+      SerialPrint("up: ");
     }
     if(mPressed != 0) {
       RTCinput(mPressed);
       RTCoutput(); // korrekt hier? oder außerbalb der schleife
+      SerialPrint("new time: ");
       SerialPrint(mHour);
       SerialPrint(":");
       SerialPrintln(mMinute);
@@ -211,7 +199,7 @@ void loop() {
     red = hours2color[currentHour][0]*setupCorrection;
     green = hours2color[currentHour][1]*setupCorrection;
     blue = hours2color[currentHour][2]*setupCorrection;
-    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, mHour);
     pixels.show();
     if(setupDir) {
       setupCorrection += setupStepLength;
@@ -239,7 +227,7 @@ void loop() {
       green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
       blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
       
-      for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
+      for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, mHour);
       pixels.show();
       mPreviousSecond = mSecond;
     }
