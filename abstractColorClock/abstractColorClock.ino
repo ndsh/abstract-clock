@@ -57,20 +57,30 @@
   #include <Wire.h>
 #endif
 
-//READ ONLY
-const uint8_t mLeds= 6;
-const uint8_t mButtons = A0;
+// PINS
+#if defined (__AVR_ATtiny85__)
+const int mButtonsPin = A3;
+const uint8_t mSensorPin = A2;
+const uint8_t mLedsPin = 1;
+#else
+const int mButtonsPin = A0;
+const uint8_t mSensorPin = A1;
+const uint8_t mLedsPin = 6;
+#endif
+
+// READ ONLY
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 #define DEPLOY false
 const bool debug = false;
-const int BUTTONS_PIN = A0;
-const int BUTTONS_TOTAL = 3;
-const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
+const int mButtonsTotal = 3;
+const int mButtonsValues[mButtonsTotal] = {0, 317, 486};
 const int BUTTON_SELECT = 0;
 const int BUTTON_DOWN = 1;
 const int BUTTON_UP = 2;
 const bool startup = true;
+
+
 
 // GLOBAL
 bool setupMode;
@@ -88,8 +98,8 @@ float setupCorrectionMax = 0.8;
 float setupStepLength = 0.001; // ohne serial print is ganz geil
 
 // OBJECTS
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, mLeds, NEO_GRB + NEO_KHZ800);
-AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, mLedsPin, NEO_GRB + NEO_KHZ800);
+AnalogMultiButton buttons(mButtonsPin, mButtonsTotal, mButtonsValues);
 
 // ARRAYS
 extern const uint8_t gamma[];
