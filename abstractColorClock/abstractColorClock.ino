@@ -61,6 +61,7 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
   [x] analog input buttons
   [ ] serial println wrapper
   [ ] in debug: show whenever color changes to the next value
+  [ ] replace floats
 */
 
 /* photores
@@ -90,7 +91,7 @@ const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
 const int BUTTON_SELECT = 0;
 const int BUTTON_DOWN = 1;
 const int BUTTON_UP = 2;
-const int startup = true;
+const int startup = false;
 
 // GLOBAL
 bool setupMode;
@@ -100,8 +101,7 @@ unsigned long colorWipePreviousMillis = 0;
 uint16_t currentPixel = 0; // what pixel are we operating on
 float correction = 2.0; // gamma correction for night time
 
-int mSecond, mMinute, mDay, mWeekday, mMonth, mYear;
-int mHour;
+int mSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
 
 // variables for fading the lights in setup mode
 float setupCorrection = 0.0;
@@ -279,6 +279,7 @@ void loop() {
   //
   // +++++++++++++++++++++++++++++++++ */
   } else {
+    // sekunden check vielleicht??
     mCurrentSeconds = (mMinute*60)+mSecond;
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
@@ -292,9 +293,11 @@ void loop() {
       nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
     }
+    /*
     SerialPrint(currentHour);
     SerialPrint("\t");
     SerialPrintln(nextHour);
+    */
     red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
     green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
     blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
@@ -327,13 +330,16 @@ int getNewPosition(int step, int a, int b) {
   SerialPrint("\t");
   SerialPrintln(mCalculatedStep);
   */
+  //Serial.println(mCalculatedStep,10); // 10 nachkommastellen ausgeben
   int mNewPosition = 0;
   for(int i = 0; i<step;i++) {
     mBucket += mCalculatedStep;
     if(mBucket >= 1) {
       mBucket -= 1.0;
       mNewPosition += 1;
+      
     }
+    //Serial.println(mBucket);
   }
   return mNewPosition;
 }
