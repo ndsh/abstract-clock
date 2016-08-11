@@ -25,15 +25,16 @@
 
  /* todo list: 
   [ ] photo resistor
-  [/] start up sequence
-  [ ] secret button codes
-  [/] replace modulo operations
+  [x] start up sequence
+  [x] replace modulo operations
   [x] better setup mode sequence (fade?)
   [x] analog input buttons
   [/] serial println wrapper
   [-] in debug: show whenever color changes to the next value
   [ ] replace floats
   [x] loop only every second (millis timer)
+  
+  [ ] secret button codes
   [ ] put functions into a proper library
 */
 
@@ -44,7 +45,7 @@
 
 /*
   photores:
-  analogRead(lightPin)/4);  //you have  to divide the value. for example, 
+  analogRead(mSensorPin)/4);  //you have  to divide the value. for example, 
                             //with a 10k resistor divide the value by 2, for 100k resistor divide by 4.
 */
 
@@ -320,11 +321,25 @@ void setPixelColorWrapper(uint8_t pixel, int r, int g, int b, int currentHour) {
   g =  pgm_read_byte(&gamma[g]);
   b =  pgm_read_byte(&gamma[b]);
   if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
-    r *= correction;
-    g *= correction;
-    b *= correction;
+    int sensorValue = analogRead(mSensorPin);
+    if(sensorValue < 100) {
+      //SerialPrint("sensing mode : ");
+      //SerialPrintln(sensorValue);
+      float gammaRange = mapfloat((float)sensorValue, 0.0,1023.0,0.0,1.0);
+      r *= gammaRange;
+      g *= gammaRange;
+      b *= gammaRange;
+    } else {
+      //SerialPrintln("normal mode");
+      r *= correction;
+      g *= correction;
+      b *= correction;
+    }
   }
   pixels.setPixelColor(pixel, r, g, b);
+}
+float mapfloat(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 void RTCinput(int mPressed) {
   #if defined (__AVR_ATtiny85__)
