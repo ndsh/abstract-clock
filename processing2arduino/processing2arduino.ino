@@ -1,123 +1,28 @@
-/*
-replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip-13-use-the-modulus-operator-with-caution/
-*/
-
-/*
- * ok wichtig. PULLUPS benutzen für SDA/SCL
- * und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
- * den stream auslesen
- */
- 
-  /* buttons:
-     http://damienclarke.me/code/analog-multi-button
-   */
- /*
-
-                               +-----+
-         +----[PWR]-------------------| USB |--+
-         |                            +-----+  |
-         |         GND/RST2  [ ][ ]            |
-         |       MOSI2/SCK2  [ ][ ]  A5/SCL[ ] |   C5 
-         |          5V/MISO2 [ ][ ]  A4/SDA[ ] |   C4 
-         |                             AREF[ ] |
-         |                              GND[ ] |
-         | [ ]N/C                    SCK/13[ ] |   B5
-         | [ ]IOREF                 MISO/12[ ] |   .
-         | [ ]RST                   MOSI/11[ ]~|   .
-         | [ ]3V3    +---+               10[ ]~|   .
-         | [ ]5v    -| A |-               9[ ]~|   .
-         | [ ]GND   -| R |-               8[ ] |   B0
-         | [X]GND   -| D |-                    |
-         | [X]Vin   -| U |-               7[ ] |   D7
-         |          -| I |-               6[X]~|   .
-         | [/]A0    -| N |-               5[ ]~|   .
-         | [ ]A1    -| O |-               4[X] |   .
-         | [ ]A2     +---+           INT1/3[X]~|   .
-         | [ ]A3                     INT0/2[X] |   .
-         | [X]A4/SDA  RST SCK MISO     TX>1[ ] |   .
-         | [X]A5/SCL  [ ] [ ] [ ]      RX<0[ ] |   D0
-         |            [ ] [ ] [ ]              |
-         |  UNO_R3    GND MOSI 5V  ____________/
-          \_______________________/
-*/
-
- /*
- * attiny85:
- * d1: leds
- * d0 : sda
- * d2 : scl
- * d4 : button3
- * d3 : button2
- * d5 : button1
- * d? : photo resistor
- */
-
- /* todo list: 
-  [ ] photo resistor
-  [/] start up sequence
-  [ ] secret button codes
-  [ ] replace modulo operations
-  [x] better setup mode sequence (fade?)
-  [x] analog input buttons
-  [ ] serial println wrapper
-  [-] in debug: show whenever color changes to the next value
-  [ ] replace floats
-  [x] loop only every second (millis timer)
-  [ ] put functions into a proper library
-*/
-
-/*
-  give your modulo operations a boost:
-  C = A % B is equivalent to C = A - B * (A / B)
- */
-
-/*
-  photores:
-  analogRead(lightPin)/4);  //you have  to divide the value. for example, 
-                            //with a 10k resistor divide the value by 2, for 100k resistor divide by 4.
-*/
-
 // IMPORTS
+
+#include <Wire.h>
 #include <Adafruit_NeoPixel.h>
-#include <AnalogMultiButton.h>
-#if defined (__AVR_ATtiny85__)
-  #include <TinyWireM.h>
-#else
-  #include <Wire.h>
-#endif
 
 //READ ONLY
-const uint8_t mLeds= 6;
-const uint8_t mButtons = A0;
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
-#define DEBUG false
-const int BUTTONS_PIN = A0;
-const int BUTTONS_TOTAL = 3;
-const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
-const int BUTTON_SELECT = 0;
-const int BUTTON_DOWN = 1;
-const int BUTTON_UP = 2;
-const int startup = false;
+const boolean debug = false;
+const uint8_t mLeds= 6;
 
 // GLOBAL
-bool setupMode;
-float correction = 2.0; // gamma correction for night time
-int mSecond, mPreviousSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
+int mSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
+unsigned long normalInterval = 1000; // the time we need to wait
+unsigned long normalPreviousMillis = 0;
+int mPreviousSecond;
+int mPreviousRed, mPreviousGreen, mPreviousBlue;
+// millis rollover: if ((unsigned long)(millis() - previousMillis) >= interval)
+
 int nextHour = 0;
 int currentHour = 0;
 int mCurrentSeconds = 0;
 
-// variables for fading the lights in setup mode
-float setupCorrection = 0.0;
-bool setupDir = true;
-float setupCorrectionMin = 0.4;
-float setupCorrectionMax = 0.8;
-float setupStepLength = 0.001; // ohne serial print is ganz geil
-
 // OBJECTS
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, mLeds, NEO_GRB + NEO_KHZ800);
-AnalogMultiButton buttons(BUTTONS_PIN, BUTTONS_TOTAL, BUTTONS_VALUES);
 
 // ARRAYS
 extern const uint8_t gamma[];
@@ -137,50 +42,20 @@ uint8_t hours2color[12][3] = {
 };
 
 void setup() { 
-  #if defined (__AVR_ATtiny85__)
-    TinyWireM.begin();
-  #else
     Serial.begin(9600);
-    SerialPrintln("### welcome to ocolorum");
+    SerialPrintln("### welcome to OCOLORUM");
     Wire.begin();
     RTCoutput();
     SerialPrint(mHour);
     SerialPrint(":");
     SerialPrintln(mMinute);
     SerialPrint("---------");
-  #endif
 
   // initialize sub-routines
   pixels.begin();
-
-  setupMode = false;
-
-  // START UP SEQUENCE
-  if(startup) {
-    // fade in "white"
-    for(int j = 0; j<125; j++) {
-      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
-      pixels.show();
-      delay(20);
-    }
-    
-    // flash through all of the colors. BAM! BAM! BAM!
-    for(int j = 0; j<12; j++) {
-      for(int i = 0; i<NUMPIXELS; i++) {
-        setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
-      }
-      pixels.show();
-      delay(100);
-    }
-  
-    // maybe fade out
-    // and then fade to the currentHours array?
-  }
 }
 
-void loop() {
-  buttons.update();
-  
+void loop() {  
   int deltaNoon = 0;
   int theOdd = 0;
   boolean beforeNoon = false;
@@ -188,18 +63,10 @@ void loop() {
   int green = 0;
   int blue = 0;
   
-  if(buttons.onRelease(BUTTON_SELECT)) {
-    setupMode = !setupMode;
-    if(setupMode == true) {
-      for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i,0,0,0);
-      pixels.show();
-      setupDir = true;
-      setupCorrection = 0.0;
-    }
-  }
-  #ifdef DEBUG
+  
+  if(!debug) {
     RTCoutput();
-  #else
+  } else {
     mSecond += 10;
     if(mSecond >= 60) {
       mSecond = 0;
@@ -209,74 +76,50 @@ void loop() {
       mMinute = 0;
       mHour++;
     }
-    if(mHour >= 24) mHour = 0;
-  #endif
-
-  /* ++++++++++++++++++++++++++++++++++++
-  //
-  //            SETUP MODE
-  //
-  // +++++++++++++++++++++++++++++++++ */
-  if(setupMode) {
-    int mPressed = 0;
-    
-    if(buttons.onRelease(BUTTON_DOWN)) { // down button
-      mPressed = -1;
-      SerialPrintln("down");
-    }
-    if(buttons.onRelease(BUTTON_UP)) { // up button
-      mPressed = 1;
-      SerialPrintln("up");
-    }
-    if(mPressed != 0) {
-      RTCinput(mPressed);
-      RTCoutput(); // korrekt hier? oder außerbalb der schleife
-      SerialPrint(mHour);
-      SerialPrint(":");
-      SerialPrintln(mMinute);
-    }
-    calculateNewTime();
-    red = hours2color[currentHour][0]*setupCorrection;
-    green = hours2color[currentHour][1]*setupCorrection;
-    blue = hours2color[currentHour][2]*setupCorrection;
-    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
-    pixels.show();
-    if(setupDir) {
-      setupCorrection += setupStepLength;
-      if(setupCorrection >= setupCorrectionMax) {
-        setupDir = false;
-        setupCorrection = setupCorrectionMax;
-      }
-    }
-    else {
-      setupCorrection -= setupStepLength;
-      if(setupCorrection < setupCorrectionMin) {
-        setupDir = true;
-        setupCorrection = setupCorrectionMin;
-      }
-    }
-  /* ++++++++++++++++++++++++++++++++++++
-  //
-  //            NORMAL MODE
-  //
-  // +++++++++++++++++++++++++++++++++ */
-  } else {
-    if(mPreviousSecond != mSecond) {
-      calculateNewTime();
-      red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
-      green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
-      blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
-      
-      for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
-      pixels.show();
-      mPreviousSecond = mSecond;
+    if(mHour >= 24) {
+      mHour = 0;
     }
   }
-}
-
-/* ############################## */
-/* ######### FUNCTIONS ########## */
-/* ############################## */
+  if(mPreviousSecond != mSecond) {
+    SerialPrint("ping");
+    //SerialPrint("\t");
+    //SerialPrint(mHour);
+    //SerialPrint("\t");
+    //SerialPrint(mMinute);
+    //SerialPrint("\t");
+    //SerialPrintln(mSecond);
+    // sekunden check vielleicht??
+    calculateNewTime();
+    /*
+    SerialPrint(currentHour);
+    SerialPrint("\t");
+    SerialPrintln(nextHour);
+    */
+    red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
+    green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
+    blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
+    /*
+    if(mPreviousRed != red) {
+      SerialPrintln("new red");
+      mPreviousRed = red;
+    }
+    if(mPreviousGreen != green) {
+      SerialPrintln("new green");
+      mPreviousGreen = green;
+    }
+    if(mPreviousBlue != blue) {
+      SerialPrintln("new blue");
+      mPreviousBlue = blue;
+    }
+    */
+    
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
+    pixels.show();
+    mPreviousSecond = mSecond;
+    SerialPrintln("------------");
+    Serial.println();
+  }
+} // end loop
 void calculateNewTime() {
   mCurrentSeconds = (mMinute*60)+mSecond;
   int beforeNoon = (mHour<=11?true:false);
@@ -292,7 +135,16 @@ void calculateNewTime() {
     if(nextHour == -1) nextHour = 0;    
   }
 }
+/* ############################## */
+/* ############################## */
+/* ############################## */
+
 int getNewValue(int step, int a, int b) {
+  /*SerialPrint("getNewValue: ");
+  SerialPrint(a);
+  SerialPrint(" - ");
+  SerialPrint(b);
+  SerialPrintln(" /");*/
   if(getPositive(a, b)) {
     return (a+getNewPosition(step, a, b));
   } else {
@@ -348,11 +200,12 @@ void setPixelColorWrapper(uint8_t pixel, int r, int g, int b, int currentHour) {
   r =  pgm_read_byte(&gamma[r]);
   g =  pgm_read_byte(&gamma[g]);
   b =  pgm_read_byte(&gamma[b]);
-  if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
+/*  if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
     r *= correction;
     g *= correction;
     b *= correction;
   }
+  */
   pixels.setPixelColor(pixel, r, g, b);
 }
 void RTCinput(int mPressed) {
