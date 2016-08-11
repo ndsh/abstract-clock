@@ -7,12 +7,7 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
  * und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
  * den stream auslesen
  */
- /*
-  * 1st button: under 800
-  * 2nd button: >= 800 && < 1000
-  * 3rd button: > 1000
-  */
-
+ 
   /* buttons:
      http://damienclarke.me/code/analog-multi-button
    */
@@ -62,8 +57,10 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
   [/] start up sequence
   [ ] secret button codes
   [ ] replace modulo operations
-  [ ] better setup mode sequence (fade?)
-  [ ] shift register for buttons
+  [x] better setup mode sequence (fade?)
+  [x] analog input buttons
+  [ ] serial println wrapper
+  [ ] in debug: show whenever color changes to the next value
 */
 
 /* photores
@@ -93,7 +90,7 @@ const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
 const int BUTTON_SELECT = 0;
 const int BUTTON_DOWN = 1;
 const int BUTTON_UP = 2;
-const int startup = false;
+const int startup = true;
 
 // GLOBAL
 bool setupMode;
@@ -103,8 +100,15 @@ unsigned long colorWipePreviousMillis = 0;
 uint16_t currentPixel = 0; // what pixel are we operating on
 float correction = 2.0; // gamma correction for night time
 
-uint8_t mSecond, mMinute, mDay, mWeekday, mMonth, mYear;
+int mSecond, mMinute, mDay, mWeekday, mMonth, mYear;
 int mHour;
+
+// variables for fading the lights in setup mode
+float setupCorrection = 0.0;
+bool setupDir = true;
+float setupCorrectionMin = 0.4;
+float setupCorrectionMax = 0.8;
+float setupStepLength = 0.001; // ohne serial print is ganz geil
 
 
 // OBJECTS
@@ -136,11 +140,13 @@ void setup() {
     TinyWireM.begin();
   #else
     Serial.begin(9600);
+    SerialPrintln("### welcome to ocolorum");
     Wire.begin();
     RTCoutput();
-    Serial.print(mHour);
-    Serial.print(":");
-    Serial.println(mMinute);
+    SerialPrint(mHour);
+    SerialPrint(":");
+    SerialPrintln(mMinute);
+    SerialPrint("---------");
   #endif
   
 
@@ -153,7 +159,7 @@ void setup() {
   // START UP SEQUENCE
   if(startup) {
     // fade in "white"
-    for(int j = 0; j<255; j++) {
+    for(int j = 0; j<125; j++) {
       for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i, pixels.Color(j,j,j));
       pixels.show();
       delay(20);
@@ -161,7 +167,9 @@ void setup() {
     
     // flash through all of the colors. BAM! BAM! BAM!
     for(int j = 0; j<12; j++) {
-      for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
+      for(int i = 0; i<NUMPIXELS; i++) {
+        setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
+      }
       pixels.show();
       delay(100);
     }
@@ -174,21 +182,23 @@ void setup() {
 void loop() {
   buttons.update();
   
-  uint8_t nextHour = 0;
-  uint8_t currentHour = 0;
-  uint8_t mCurrentSeconds = 0;
-  uint8_t deltaNoon = 0;
-  uint8_t theOdd = 0;
+  int nextHour = 0;
+  int currentHour = 0;
+  int mCurrentSeconds = 0;
+  int deltaNoon = 0;
+  int theOdd = 0;
   boolean beforeNoon = false;
-  uint8_t red = 0;
-  uint8_t green = 0;
-  uint8_t blue = 0;
+  int red = 0;
+  int green = 0;
+  int blue = 0;
   
   if(buttons.onRelease(BUTTON_SELECT)) {
     setupMode = !setupMode;
     if(setupMode == true) {
       for(int i = 0; i<NUMPIXELS; i++) pixels.setPixelColor(i,0,0,0);
       pixels.show();
+      setupDir = true;
+      setupCorrection = 0.0;
     }
   }
   if(!debug) {
@@ -218,51 +228,18 @@ void loop() {
     
     if(buttons.onRelease(BUTTON_DOWN)) { // down button
       mPressed = -1;
-      Serial.println("down");
+      SerialPrintln("down");
     }
     if(buttons.onRelease(BUTTON_UP)) { // up button
       mPressed = 1;
-      Serial.println("up");
+      SerialPrintln("up");
     }
-    #if defined (__AVR_ATtiny85__)
-    #else
-      if(mPressed != 0) {
-      Serial.print("##### \t");
-      Serial.println(mPressed);
-      }
-    #endif
     if(mPressed != 0) {
-      #if defined (__AVR_ATtiny85__)
-        TinyWireM.beginTransmission(DS1307_ADRESSE);
-        TinyWireM.send(0x00);
-        TinyWireM.send(decToBcd(mSecond));
-        TinyWireM.send(decToBcd(mMinute));
-        if(mPressed == -1) TinyWireM.send(decToBcd(getHour(mHour,false)));
-        else if(mPressed == 1) TinyWireM.send(decToBcd(getHour(mHour,true)));
-        TinyWireM.send(decToBcd(mWeekday));
-        TinyWireM.send(decToBcd(mDay));
-        TinyWireM.send(decToBcd(mMonth));
-        TinyWireM.send(decToBcd(mYear));
-        TinyWireM.send(0x00);
-        TinyWireM.endTransmission();
-      #else
-        Wire.beginTransmission(DS1307_ADRESSE);
-        Wire.write(0x00);
-        Wire.write(decToBcd(mSecond));
-        Wire.write(decToBcd(mMinute));
-        if(mPressed == -1) Wire.write(decToBcd(getHour(mHour,false)));
-        else if(mPressed == 1) Wire.write(decToBcd(getHour(mHour,true)));
-        Wire.write(decToBcd(mWeekday));
-        Wire.write(decToBcd(mDay));
-        Wire.write(decToBcd(mMonth));
-        Wire.write(decToBcd(mYear));
-        Wire.write(0x00);
-        Wire.endTransmission();
-      #endif
+      RTCinput(mPressed);
       RTCoutput(); // korrekt hier? oder außerbalb der schleife
-      Serial.print(mHour);
-      Serial.print(":");
-      Serial.println(mMinute);
+      SerialPrint(mHour);
+      SerialPrint(":");
+      SerialPrintln(mMinute);
     }
     beforeNoon = (mHour<=11?true:false);
     currentHour = mHour;
@@ -276,21 +253,25 @@ void loop() {
       nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
     }  
-    
-    if ((unsigned long)(millis() - colorWipePreviousMillis) >= pixelsInterval) {
-      colorWipePreviousMillis = millis();
-      red = hours2color[currentHour][0];
-      green = hours2color[currentHour][1];
-      blue = hours2color[currentHour][2];
-      setPixelColorWrapper(currentPixel, red, green, blue, currentHour);
-      pixels.show();
-      int j = currentPixel;
-      j--;
-      if(j==-1) j = 9;
-      pixels.setPixelColor(j,0,0,0);
-      pixels.show();
-      currentPixel++;
-      if(currentPixel == NUMPIXELS) currentPixel = 0;
+    red = hours2color[currentHour][0]*setupCorrection;
+    green = hours2color[currentHour][1]*setupCorrection;
+    blue = hours2color[currentHour][2]*setupCorrection;
+    for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, currentHour);
+    pixels.show();
+    if(setupDir) {
+      setupCorrection += setupStepLength;
+      if(setupCorrection >= setupCorrectionMax) {
+        setupDir = false;
+        setupCorrection = setupCorrectionMax;
+      }
+    }
+    else {
+      setupCorrection -= setupStepLength;
+      //Serial.print(setupCorrection);
+      if(setupCorrection < setupCorrectionMin) {
+        setupDir = true;
+        setupCorrection = setupCorrectionMin;
+      }
     }
   /* ++++++++++++++++++++++++++++++++++++
   //
@@ -311,6 +292,9 @@ void loop() {
       nextHour = (currentHour-1)%24;
       if(nextHour == -1) nextHour = 0;    
     }
+    SerialPrint(currentHour);
+    SerialPrint("\t");
+    SerialPrintln(nextHour);
     red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
     green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
     blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
@@ -319,12 +303,10 @@ void loop() {
     pixels.show();
   }
 }
-
-void setPixelColorWrapper(uint8_t pixel, uint8_t r, uint8_t g, uint8_t b, uint8_t currentHour) {
+void setPixelColorWrapper(uint8_t pixel, int r, int g, int b, int currentHour) {
   r =  pgm_read_byte(&gamma[r]);
   g =  pgm_read_byte(&gamma[g]);
   b =  pgm_read_byte(&gamma[b]);
-  
   if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
     r *= correction;
     g *= correction;
@@ -332,14 +314,19 @@ void setPixelColorWrapper(uint8_t pixel, uint8_t r, uint8_t g, uint8_t b, uint8_
   }
   pixels.setPixelColor(pixel, r, g, b);
 }
-
-boolean getPositive(uint8_t a, uint8_t b) {
+boolean getPositive(int a, int b) {
   return (b-a>0?true:false);
 }
-
-uint8_t getNewPosition(uint8_t step, uint8_t a, uint8_t b) {
-  float mBucket = 0;
-  float mCalculatedStep = (abs(b-a))/3600.0;
+int getNewPosition(int step, int a, int b) {
+  float mBucket = 0.0;
+  float mCalculatedStep = (abs(b-a))/3600.0001;
+  /*
+  SerialPrint(a);
+  SerialPrint("\t");
+  SerialPrint(b);
+  SerialPrint("\t");
+  SerialPrintln(mCalculatedStep);
+  */
   int mNewPosition = 0;
   for(int i = 0; i<step;i++) {
     mBucket += mCalculatedStep;
@@ -351,14 +338,13 @@ uint8_t getNewPosition(uint8_t step, uint8_t a, uint8_t b) {
   return mNewPosition;
 }
 
-uint8_t getNewValue(int step, int a, int b) {
+int getNewValue(int step, int a, int b) {
   if(getPositive(a, b)) {
     return (a+getNewPosition(step, a, b));
   } else {
     return (a-getNewPosition(step, a, b));
   }
 }
-
 int getHour(int _mHour, bool dir) {
   if(dir) {
     _mHour++;
@@ -369,12 +355,10 @@ int getHour(int _mHour, bool dir) {
   }
   return _mHour;
 }
-
 void setHour(int _mHour) {
   mHour = _mHour;
 }
-
-uint8_t getMinute(uint8_t _mMinute, uint8_t _mHour, bool dir) {
+int getMinute(int _mMinute, int _mHour, bool dir) {
   if(dir) {
     _mMinute++;
     if(_mMinute%60 == 0) {
@@ -390,11 +374,52 @@ uint8_t getMinute(uint8_t _mMinute, uint8_t _mHour, bool dir) {
   }
   return _mMinute;
 }
-
+void RTCinput(int mPressed) {
+  #if defined (__AVR_ATtiny85__)
+      TinyWireM.beginTransmission(DS1307_ADRESSE);
+      TinyWireM.send(0x00);
+      TinyWireM.send(decToBcd(mSecond));
+      TinyWireM.send(decToBcd(mMinute));
+      if(mPressed == -1) TinyWireM.send(decToBcd(getHour(mHour,false)));
+      else if(mPressed == 1) TinyWireM.send(decToBcd(getHour(mHour,true)));
+      TinyWireM.send(decToBcd(mWeekday));
+      TinyWireM.send(decToBcd(mDay));
+      TinyWireM.send(decToBcd(mMonth));
+      TinyWireM.send(decToBcd(mYear));
+      TinyWireM.send(0x00);
+      TinyWireM.endTransmission();
+    #else
+      Wire.beginTransmission(DS1307_ADRESSE);
+      Wire.write(0x00);
+      Wire.write(decToBcd(mSecond));
+      Wire.write(decToBcd(mMinute));
+      if(mPressed == -1) Wire.write(decToBcd(getHour(mHour,false)));
+      else if(mPressed == 1) Wire.write(decToBcd(getHour(mHour,true)));
+      Wire.write(decToBcd(mWeekday));
+      Wire.write(decToBcd(mDay));
+      Wire.write(decToBcd(mMonth));
+      Wire.write(decToBcd(mYear));
+      Wire.write(0x00);
+      Wire.endTransmission();
+    #endif
+}
 void RTCoutput(){
   // initialize and point at head
-  // read/write is normal!!
+  // read/write is normal since Wire 1.0
   #if defined (__AVR_ATtiny85__)
+    TinyWireM.beginTransmission(DS1307_ADRESSE);
+    TinyWireM.write(0x00);
+    TinyWireM.endTransmission();
+   
+    TinyWireM.requestFrom(DS1307_ADRESSE, 7);
+   
+    mSecond = bcdToDec(TinyWireM.read());
+    mMinute = bcdToDec(TinyWireM.read());
+    mHour = bcdToDec(TinyWireM.read() & 0b111111);
+    mWeekday = bcdToDec(TinyWireM.read());
+    mDay = bcdToDec(TinyWireM.read());
+    mMonth = bcdToDec(TinyWireM.read());
+    mYear = bcdToDec(TinyWireM.read());
   #else
     Wire.beginTransmission(DS1307_ADRESSE);
     Wire.write(0x00);
@@ -411,32 +436,63 @@ void RTCoutput(){
     mYear = bcdToDec(Wire.read());
   #endif
 }
-// Helpers
 byte decToBcd(byte val) {
   return ((val/10*16) + (val%10));
 }
 byte bcdToDec(byte val) {
   return ((val/16*10) + (val%16));
 }
-
 byte wireRead() {
   #if defined (__AVR_ATtiny85__)
-  TinyWireM.receive();
+    TinyWireM.receive();
   #else
-  Wire.read();
-  #endif
-  
+    Wire.read();
+  #endif 
 }
-
 void wireWrite(byte b) {
   #if defined (__AVR_ATtiny85__)
-  TinyWireM.send(b);
+    TinyWireM.send(b);
   #else
-  Wire.write(b);
+    Wire.write(b);
   #endif
   
 }
-
+void SerialPrint(int i) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.print(i);
+  #endif
+}
+void SerialPrint(byte b) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.print(b);
+  #endif
+}
+void SerialPrint(String s) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.print(s);
+  #endif
+}
+void SerialPrintln(String s) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.println(s);
+  #endif
+}
+void SerialPrintln(int i) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.println(i);
+  #endif
+}
+void SerialPrintln(float f) {
+  #if defined (__AVR_ATtiny85__)
+  #else
+    Serial.println(f);
+  #endif
+}
 const uint8_t PROGMEM gamma[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
