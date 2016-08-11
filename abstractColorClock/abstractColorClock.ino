@@ -62,15 +62,15 @@ const uint8_t mLeds= 6;
 const uint8_t mButtons = A0;
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
-#define DEBUG false
 #define DEPLOY false
+const bool debug = false;
 const int BUTTONS_PIN = A0;
 const int BUTTONS_TOTAL = 3;
 const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
 const int BUTTON_SELECT = 0;
 const int BUTTON_DOWN = 1;
 const int BUTTON_UP = 2;
-const int startup = false;
+const bool startup = true;
 
 // GLOBAL
 bool setupMode;
@@ -136,17 +136,6 @@ void setup() {
       delay(20);
     }
     
-    // flash through all of the colors. BAM! BAM! BAM!
-    for(int j = 0; j<12; j++) {
-      for(int i = 0; i<NUMPIXELS; i++) {
-        setPixelColorWrapper(i, hours2color[j][0], hours2color[j][2], hours2color[j][2], 12); // just set currentHour to 12, so we get full brightness here
-      }
-      pixels.show();
-      delay(100);
-    }
-  
-    // maybe fade out
-    // and then fade to the currentHours array?
   }
 }
 
@@ -169,9 +158,9 @@ void loop() {
       setupCorrection = 0.0;
     }
   }
-  #ifdef DEBUG
+  if(!debug) {
     RTCoutput();
-  #else
+  } else {
     mSecond += 10;
     if(mSecond >= 60) {
       mSecond = 0;
@@ -182,7 +171,7 @@ void loop() {
       mHour++;
     }
     if(mHour >= 24) mHour = 0;
-  #endif
+  }
 
   /* ++++++++++++++++++++++++++++++++++++
   //
