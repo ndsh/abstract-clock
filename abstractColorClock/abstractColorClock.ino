@@ -1,46 +1,17 @@
 /*
-replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip-13-use-the-modulus-operator-with-caution/
+  replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip-13-use-the-modulus-operator-with-caution/
 */
 
 /*
- * ok wichtig. PULLUPS benutzen für SDA/SCL
- * und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
- * den stream auslesen
+  ok wichtig. PULLUPS benutzen für SDA/SCL
+  und: entweder einen ersatz für ds1307 lib finden oder komplett mit TinyWire
+  den stream auslesen
+*/
+ 
+/* buttons:
+  http://damienclarke.me/code/analog-multi-button
  */
  
-  /* buttons:
-     http://damienclarke.me/code/analog-multi-button
-   */
- /*
-
-                               +-----+
-         +----[PWR]-------------------| USB |--+
-         |                            +-----+  |
-         |         GND/RST2  [ ][ ]            |
-         |       MOSI2/SCK2  [ ][ ]  A5/SCL[ ] |   C5 
-         |          5V/MISO2 [ ][ ]  A4/SDA[ ] |   C4 
-         |                             AREF[ ] |
-         |                              GND[ ] |
-         | [ ]N/C                    SCK/13[ ] |   B5
-         | [ ]IOREF                 MISO/12[ ] |   .
-         | [ ]RST                   MOSI/11[ ]~|   .
-         | [ ]3V3    +---+               10[ ]~|   .
-         | [ ]5v    -| A |-               9[ ]~|   .
-         | [ ]GND   -| R |-               8[ ] |   B0
-         | [X]GND   -| D |-                    |
-         | [X]Vin   -| U |-               7[ ] |   D7
-         |          -| I |-               6[X]~|   .
-         | [/]A0    -| N |-               5[ ]~|   .
-         | [ ]A1    -| O |-               4[X] |   .
-         | [ ]A2     +---+           INT1/3[X]~|   .
-         | [ ]A3                     INT0/2[X] |   .
-         | [X]A4/SDA  RST SCK MISO     TX>1[ ] |   .
-         | [X]A5/SCL  [ ] [ ] [ ]      RX<0[ ] |   D0
-         |            [ ] [ ] [ ]              |
-         |  UNO_R3    GND MOSI 5V  ____________/
-          \_______________________/
-*/
-
  /*
  * attiny85:
  * d1: leds
@@ -56,10 +27,10 @@ replace modulos: http://embeddedgurus.com/stack-overflow/2011/02/efficient-c-tip
   [ ] photo resistor
   [/] start up sequence
   [ ] secret button codes
-  [ ] replace modulo operations
+  [/] replace modulo operations
   [x] better setup mode sequence (fade?)
   [x] analog input buttons
-  [ ] serial println wrapper
+  [/] serial println wrapper
   [-] in debug: show whenever color changes to the next value
   [ ] replace floats
   [x] loop only every second (millis timer)
@@ -92,6 +63,7 @@ const uint8_t mButtons = A0;
 const uint8_t NUMPIXELS = 10;
 #define DS1307_ADRESSE 0x68 // I2C Addresse
 #define DEBUG false
+#define DEPLOY false
 const int BUTTONS_PIN = A0;
 const int BUTTONS_TOTAL = 3;
 const int BUTTONS_VALUES[BUTTONS_TOTAL] = {0, 317, 486};
@@ -281,14 +253,14 @@ void calculateNewTime() {
   mCurrentSeconds = (mMinute*60)+mSecond;
   int beforeNoon = (mHour<=11?true:false);
   currentHour = mHour;
-  nextHour = (currentHour+1)%12;
+  nextHour = (currentHour+1)-12*((currentHour+1)/12);
   if(nextHour==0) nextHour = currentHour;
   
   if(!beforeNoon) {
     int deltaNoon = (mHour-12)+1;
     int theOdd = (deltaNoon*2)-1;
     currentHour = mHour-theOdd;
-    nextHour = (currentHour-1)%24;
+    nextHour = (currentHour-1)-24*((currentHour-1)/24);    
     if(nextHour == -1) nextHour = 0;    
   }
 }
