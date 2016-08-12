@@ -13,14 +13,14 @@
  */
 
  /* todo list: 
-  [ ] photo resistor
+  [x] photo resistor
   [x] start up sequence
   [x] replace modulo operations
   [x] better setup mode sequence (fade?)
   [x] analog input buttons
   [/] serial println wrapper
   [-] in debug: show whenever color changes to the next value
-  [ ] replace floats
+  [ ] cut down/replace floats
   [x] loop only every second (millis timer)
   
   [ ] secret button codes
@@ -45,6 +45,7 @@
   #include <TinyWireM.h>
 #else
   #include <Wire.h>
+  #include <SerialWrapper.h>
 #endif
 
 // PINS
@@ -93,7 +94,7 @@ AnalogMultiButton buttons(mButtonsPin, mButtonsTotal, mButtonsValues);
 
 // ARRAYS
 extern const uint8_t gamma[];
-uint8_t hours2color[12][3] = {
+const uint8_t PROGMEM hours2color[12][3] = {
   { 20, 24, 39 },
   { 6, 30, 64 },
   { 8, 41, 92 },
@@ -181,24 +182,27 @@ void loop() {
     
     if(buttons.onRelease(BUTTON_DOWN)) { // down button
       mPressed = -1;
-      SerialPrint("down: ");
+      //SerialPrint("down: ");
     }
     if(buttons.onRelease(BUTTON_UP)) { // up button
       mPressed = 1;
-      SerialPrint("up: ");
+      //SerialPrint("up: ");
     }
     if(mPressed != 0) {
       RTCinput(mPressed);
       RTCoutput(); // korrekt hier? oder außerbalb der schleife
+      /*
       SerialPrint("new time: ");
       SerialPrint(mHour);
       SerialPrint(":");
       SerialPrintln(mMinute);
+      */
     }
     calculateNewTime();
-    red = hours2color[currentHour][0]*setupCorrection;
-    green = hours2color[currentHour][1]*setupCorrection;
-    blue = hours2color[currentHour][2]*setupCorrection;
+    
+    red =   (int)( pgm_read_byte(&hours2color[currentHour][0] ) *setupCorrection);
+    green = (int)( pgm_read_byte(&hours2color[currentHour][1] ) *setupCorrection);
+    blue =  (int)( pgm_read_byte(&hours2color[currentHour][2] ) *setupCorrection);
     for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, mHour);
     pixels.show();
     if(setupDir) {
@@ -223,9 +227,9 @@ void loop() {
   } else {
     if(mPreviousSecond != mSecond) {
       calculateNewTime();
-      red = getNewValue(mCurrentSeconds, hours2color[currentHour][0], hours2color[nextHour][0]);
-      green = getNewValue(mCurrentSeconds, hours2color[currentHour][1], hours2color[nextHour][1]);
-      blue = getNewValue(mCurrentSeconds, hours2color[currentHour][2], hours2color[nextHour][2]);
+      red = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][0])), (int)(pgm_read_byte(&hours2color[nextHour][0])));
+      green = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][1])), (int)(pgm_read_byte(&hours2color[nextHour][1])));
+      blue = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][2])), (int)(pgm_read_byte(&hours2color[nextHour][2])));
       
       for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, mHour);
       pixels.show();
@@ -412,42 +416,7 @@ void wireWrite(byte b) {
   #endif
   
 }
-void SerialPrint(int i) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.print(i);
-  #endif
-}
-void SerialPrint(byte b) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.print(b);
-  #endif
-}
-void SerialPrint(String s) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.print(s);
-  #endif
-}
-void SerialPrintln(String s) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.println(s);
-  #endif
-}
-void SerialPrintln(int i) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.println(i);
-  #endif
-}
-void SerialPrintln(float f) {
-  #if defined (__AVR_ATtiny85__)
-  #else
-    Serial.println(f);
-  #endif
-}
+
 const uint8_t PROGMEM gamma[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
