@@ -39,6 +39,6 @@ The gradients are abstractions of the colors colors in the sky: *From dusk over 
 ---
 
 **TO-DO (necessities + niceties)**
-[ ] implement state machine / FSM
-[ ] define states for FSM
-[ ] set-up via WiFi or Bluetooth LE
+- [ ] implement state machine / FSM
+- [ ] define states for FSM
+- [ ] set-up via WiFi or Bluetooth LE
