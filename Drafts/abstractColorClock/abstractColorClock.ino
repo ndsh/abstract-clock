@@ -45,7 +45,7 @@
   #include <TinyWireM.h>
 #else
   #include <Wire.h>
-  #include <SerialWrapper.h>
+  //#include <SerialWrapper.h>
 #endif
 
 // PINS
@@ -114,13 +114,13 @@ void setup() {
     TinyWireM.begin();
   #else
     Serial.begin(9600);
-    SerialPrintln("### welcome to ocolorum");
+    Serial.println("### welcome to ocolorum");
     Wire.begin();
     RTCoutput();
-    SerialPrint(mHour);
-    SerialPrint(":");
-    SerialPrintln(mMinute);
-    SerialPrint("---------");
+    Serial.print(mHour);
+    Serial.print(":");
+    Serial.println(mMinute);
+    Serial.print("---------");
   #endif
 
   // initialize sub-routines
