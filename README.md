@@ -3,7 +3,7 @@
 
 ![](Assets/key.png)
 
-# Ocolororum (wip)
+# Ocolorum (wip)
 An abstract light clock running on Arduino Uno + RTC Module + NeoPixels as a visual representation of the day/night sky.
 I am reorganizing this project (as some other projects) during the COVID-19 pandemic in 2020.
 For more information please see the point TO-DO
