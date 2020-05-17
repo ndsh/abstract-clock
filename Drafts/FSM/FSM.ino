@@ -7,7 +7,7 @@ int state = 0;
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
-  Serial.println("setup");
+  Serial.println("→ setup");
 }
 
 void loop() {
@@ -17,12 +17,12 @@ void loop() {
 void stateMachine() {
   switch(state) {
     case INTRO:
-      Serial.println("intro");
+      Serial.println("→ intro");
       state = RUN;
     break;
 
     case RUN:
-      Serial.println("run");
+      Serial.println("→ run");
     break;
   }
 }

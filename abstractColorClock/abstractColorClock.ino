@@ -53,7 +53,7 @@
 const int mButtonsPin = A3;
 const uint8_t mSensorPin = A2;
 const uint8_t mLedsPin = 1;
-#else
+#elsesta
 const int mButtonsPin = A0;
 const uint8_t mSensorPin = A1;
 const uint8_t mLedsPin = 6;
