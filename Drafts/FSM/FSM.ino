@@ -1,12 +1,13 @@
-#define INTRO 1
-#define RUN 2
+#define INTRO 0
+#define RUN 1
 
 int state = 0;
 
 
 void setup() {
   // put your setup code here, to run once:
-
+  Serial.begin(9600);
+  Serial.println("setup");
 }
 
 void loop() {
@@ -14,12 +15,14 @@ void loop() {
 }
 
 void stateMachine() {
-  switch state(state) {
+  switch(state) {
     case INTRO:
-      
+      Serial.println("intro");
+      state = RUN;
     break;
 
     case RUN:
+      Serial.println("run");
     break;
   }
 }
