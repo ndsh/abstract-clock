@@ -1,8 +1,9 @@
 #define SETUP 0
 #define INTRO 1
-#define RUN 2
+#define UPDATE 2
 #define CHECKINPUT 3
-#define OPTIONS 4 // ehemals SETUPMODE
+#define RUN 4
+#define OPTIONS 5 // ehemals SETUPMODE
 
 int state = 0;
 
@@ -16,6 +17,8 @@ void stateMachine() {
       Serial.println("");
       Serial.println("→ Setup");
       Serial.println("Ocolorum is starting");
+      Serial.println();
+      Serial.println("Software: https://github.com/ndsh/ocolorum");
       RTCoutput();
       Serial.print("The time is ");
       Serial.print(mHour);
@@ -28,6 +31,10 @@ void stateMachine() {
       setupMode = false;
       Serial.println();
       state = INTRO;
+
+      mPreviousHour = mHour;
+      mPreviousMinute = mMinute;
+      mPreviousSecond = mSecond;
     break;
 
     case INTRO:
@@ -39,6 +46,40 @@ void stateMachine() {
       }
       pixels.clear();
       pixels.show();
+      state = UPDATE;
+      Serial.println("→ Update");
+    break;
+
+    case UPDATE:
+      if(!debug) {
+        RTCoutput();
+      } else {
+        mSecond += 10;
+        if(mSecond >= 60) {
+          mSecond = 0;
+          mMinute++;
+        }
+        if(mMinute >= 60) {
+          mMinute = 0;
+          mHour++;
+        }
+        if(mHour >= 24) mHour = 0;
+      }
+      state = CHECKINPUT;
+    break;
+
+    case CHECKINPUT:
+      //Serial.println("→ Check for Input");
+      buttons.update();
+      if (buttons.onRelease(BUTTON_SELECT)) {
+        setupMode = !setupMode;
+        if (setupMode == true) {
+          for (int i = 0; i < NUMPIXELS; i++) pixels.setPixelColor(i, 0, 0, 0);
+          pixels.show();
+          setupDir = true;
+          setupCorrection = 0.0;
+        }
+      }
       state = RUN;
     break;
 
@@ -52,29 +93,38 @@ void stateMachine() {
       blue = 0;
       
       if(mPreviousSecond != mSecond) {
+        
         calculateNewTime();
         red = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][0])), (int)(pgm_read_byte(&hours2color[nextHour][0])));
         green = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][1])), (int)(pgm_read_byte(&hours2color[nextHour][1])));
         blue = getNewValue(mCurrentSeconds, (int)(pgm_read_byte(&hours2color[currentHour][2])), (int)(pgm_read_byte(&hours2color[nextHour][2])));
         
         for(int i = 0; i<NUMPIXELS; i++) setPixelColorWrapper(i, red, green, blue, mHour);
+        
         pixels.show();
         mPreviousSecond = mSecond;
       }
-    break;
 
-    case CHECKINPUT:
-      Serial.println("→ Check for Input");
-      buttons.update();
-      if (buttons.onRelease(BUTTON_SELECT)) {
-        setupMode = !setupMode;
-        if (setupMode == true) {
-          for (int i = 0; i < NUMPIXELS; i++) pixels.setPixelColor(i, 0, 0, 0);
-          pixels.show();
-          setupDir = true;
-          setupCorrection = 0.0;
-        }
+      if(mPreviousHour != mHour) {
+        mPreviousHour = mHour;
+        Serial.print("The time is ");
+        Serial.print(mHour);
+        Serial.print(":");
+        Serial.println(mMinute);
+      } else if(mPreviousMinute != mMinute && mMinute % 5 == 0) {
+        mPreviousMinute = mMinute;
+        Serial.print("The time is ");
+        Serial.print(mHour);
+        Serial.print(":");
+        Serial.println(mMinute);
+        Serial.print("Current color: ");
+        Serial.print(red);
+        Serial.print("/");
+        Serial.print(green);
+        Serial.print("/");
+        Serial.println(blue);
       }
+      state = UPDATE;
     break;
 
     case OPTIONS:

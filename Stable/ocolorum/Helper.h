@@ -15,6 +15,7 @@
 
 // Read-only
 const bool debug = false;
+const bool useSensor = false;
 const int buttonsTotal = 3;
 const int buttonsValues[buttonsTotal] = {0, 317, 486};
 const int BUTTON_SELECT = 0;
@@ -24,7 +25,7 @@ const int BUTTON_UP = 2;
 // Globals
 bool setupMode;
 float correction = 2.0; // gamma correction for night time
-int mSecond, mPreviousSecond, mMinute, mHour, mDay, mWeekday, mMonth, mYear;
+int mSecond, mPreviousSecond, mMinute, mPreviousMinute, mHour, mPreviousHour, mDay, mWeekday, mMonth, mYear;
 int nextHour = 0;
 int currentHour = 0;
 int mCurrentSeconds = 0;
@@ -174,10 +175,10 @@ void setPixelColorWrapper(uint8_t pixel, int r, int g, int b, int currentHour) {
   b =  pgm_read_byte(&gamma[b]);
   if( (currentHour >= 22 && currentHour <= 23) || (currentHour >= 0 && currentHour <= 2)) {
     int sensorValue = analogRead(SENSORPIN);
-    if(sensorValue < 100) {
+    if(sensorValue < 100 && useSensor) {
       //SerialPrint("sensing mode : ");
       //SerialPrintln(sensorValue);
-      float gammaRange = mapfloat((float)sensorValue, 0.0,1023.0,0.0,1.0);
+      float gammaRange = mapfloat((float)sensorValue, 0.0, 1023.0, 0.0, 1.0);
       r *= gammaRange;
       g *= gammaRange;
       b *= gammaRange;
